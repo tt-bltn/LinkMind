@@ -5,7 +5,9 @@
  */
 
 import { fileURLToPath } from "node:url";
-import type { WeiboContent, HandlerError } from "./types.js";
+import type { WeiboContent, HandlerError, ErrorCode } from "./types.js";
+import { withRetry, isRetryableError } from "./retry.js";
+import { loadConfig, parseConfigArg } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // URL parsing
@@ -121,44 +123,50 @@ async function resolveShortUrl(url: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 async function acquireVisitorCookies(): Promise<string> {
-  // Step 1: generate visitor tid
-  const genResp = await fetch(
-    "https://passport.weibo.com/visitor/genvisitor",
-    {
-      method: "POST",
-      headers: {
-        "User-Agent": MOBILE_UA,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "cb=gen_callback&fp=%7B%7D",
+  return withRetry(
+    async () => {
+      const genResp = await fetch(
+        "https://passport.weibo.com/visitor/genvisitor",
+        {
+          method: "POST",
+          headers: {
+            "User-Agent": MOBILE_UA,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: "cb=gen_callback&fp=%7B%7D",
+        },
+      );
+      const genText = await genResp.text();
+      const tidMatch = genText.match(/"tid":"([^"]+)"/);
+      if (!tidMatch) throw new Error("无法获取微博访客 tid");
+      const tid = tidMatch[1];
+
+      const incarnateResp = await fetch(
+        `https://passport.weibo.com/visitor/visitor?a=incarnate&t=${encodeURIComponent(tid)}&w=3&c=100&gc=&cb=cross_domain&from=weibo&_rand=${Math.random()}`,
+        { headers: { "User-Agent": MOBILE_UA } },
+      );
+      const incarnateText = await incarnateResp.text();
+      const subMatch = incarnateText.match(/"sub":"([^"]+)"/);
+      const subpMatch = incarnateText.match(/"subp":"([^"]+)"/);
+      if (!subMatch || !subpMatch) {
+        throw new Error("无法获取微博访客 cookie");
+      }
+
+      return `SUB=${subMatch[1]}; SUBP=${subpMatch[1]}`;
     },
+    { shouldRetry: isRetryableError },
   );
-  const genText = await genResp.text();
-  const tidMatch = genText.match(/"tid":"([^"]+)"/);
-  if (!tidMatch) throw new Error("无法获取微博访客 tid");
-  const tid = tidMatch[1];
-
-  // Step 2: exchange tid for SUB/SUBP cookies
-  const incarnateResp = await fetch(
-    `https://passport.weibo.com/visitor/visitor?a=incarnate&t=${encodeURIComponent(tid)}&w=3&c=100&gc=&cb=cross_domain&from=weibo&_rand=${Math.random()}`,
-    { headers: { "User-Agent": MOBILE_UA } },
-  );
-  const incarnateText = await incarnateResp.text();
-  const subMatch = incarnateText.match(/"sub":"([^"]+)"/);
-  const subpMatch = incarnateText.match(/"subp":"([^"]+)"/);
-  if (!subMatch || !subpMatch) {
-    throw new Error("无法获取微博访客 cookie");
-  }
-
-  return `SUB=${subMatch[1]}; SUBP=${subpMatch[1]}`;
 }
 
 // ---------------------------------------------------------------------------
 // API fetch
 // ---------------------------------------------------------------------------
 
-async function fetchWeiboData(mid: string): Promise<Record<string, any>> {
-  const cookie = await acquireVisitorCookies();
+async function fetchWeiboData(
+  mid: string,
+  configCookie?: string,
+): Promise<Record<string, any>> {
+  const cookie = configCookie || (await acquireVisitorCookies());
 
   const apiHeaders: Record<string, string> = {
     "User-Agent": MOBILE_UA,
@@ -168,23 +176,35 @@ async function fetchWeiboData(mid: string): Promise<Record<string, any>> {
     Cookie: cookie,
   };
 
-  const resp = await fetch(
-    `https://m.weibo.cn/statuses/show?id=${mid}`,
-    { headers: apiHeaders },
+  const data = await withRetry(
+    async () => {
+      const resp = await fetch(
+        `https://m.weibo.cn/statuses/show?id=${mid}`,
+        { headers: apiHeaders },
+      );
+
+      if (!resp.ok) {
+        const err = new Error(`API 请求失败: HTTP ${resp.status}`);
+        (err as any).httpStatus = resp.status;
+        throw err;
+      }
+
+      const json = await resp.json();
+      if (json.ok !== 1) {
+        throw new Error(`微博返回错误: ${json.msg ?? "未知"}`);
+      }
+
+      return json.data;
+    },
+    {
+      shouldRetry(err) {
+        const status = (err as any).httpStatus;
+        if (status && status >= 400 && status < 500) return false;
+        return isRetryableError(err);
+      },
+    },
   );
 
-  if (!resp.ok) {
-    throw new Error(`API 请求失败: HTTP ${resp.status}`);
-  }
-
-  const json = await resp.json();
-  if (json.ok !== 1) {
-    throw new Error(`微博返回错误: ${json.msg ?? "未知"}`);
-  }
-
-  const data = json.data;
-
-  // Fetch full text for long posts
   if (data.isLongText) {
     try {
       const extResp = await fetch(
@@ -279,6 +299,30 @@ export function parseWeiboContent(
 // Main
 // ---------------------------------------------------------------------------
 
+function categorizeError(e: unknown): { code: ErrorCode; details: string } {
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+  const status = (e as any)?.httpStatus as number | undefined;
+
+  if (status === 404 || lower.includes("无法从 url"))
+    return { code: "NOT_FOUND", details: "请检查链接是否正确" };
+  if (status === 403 || status === 401 || lower.includes("登录"))
+    return { code: "AUTH", details: "该内容可能需要登录，请在 config.json 中配置 cookies.weibo" };
+  if (status === 429 || lower.includes("rate") || lower.includes("频繁"))
+    return { code: "RATE_LIMIT", details: "请求过于频繁，建议稍后重试" };
+  if (lower.includes("无法获取") || lower.includes("parse") || lower.includes("解析"))
+    return { code: "PARSE", details: "内容解析失败，平台接口可能已变更" };
+  if (
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("timeout") ||
+    lower.includes("econnr")
+  )
+    return { code: "NETWORK", details: "网络请求失败，建议检查网络连接后重试" };
+
+  return { code: "UNKNOWN", details: "建议稍后重试" };
+}
+
 async function main(): Promise<void> {
   const url = process.argv[2];
 
@@ -289,15 +333,29 @@ async function main(): Promise<void> {
   }
 
   try {
+    const configPath = parseConfigArg(process.argv);
+    let configCookie: string | undefined;
+    if (configPath) {
+      try {
+        const cfg = loadConfig(configPath);
+        if (cfg.cookies?.weibo) configCookie = cfg.cookies.weibo;
+      } catch {
+        // Config read failure is non-fatal; fall back to visitor cookies
+      }
+    }
+
     const resolved = await resolveShortUrl(url);
     const mid = extractWeiboId(resolved);
-    const data = await fetchWeiboData(mid);
+    const data = await fetchWeiboData(mid, configCookie);
     const content = parseWeiboContent(data, url);
     console.log(JSON.stringify(content, null, 2));
   } catch (e) {
+    const { code, details } = categorizeError(e);
     const err: HandlerError = {
       error: e instanceof Error ? e.message : String(e),
+      code,
       url,
+      details,
     };
     console.log(JSON.stringify(err, null, 2));
     process.exit(1);

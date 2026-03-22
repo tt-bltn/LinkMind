@@ -7,11 +7,15 @@
     "typecheck": "tsc --noEmit",
     "weibo": "tsx weibo.ts",
     "xiaohongshu": "tsx xiaohongshu.ts",
+    "download-images": "tsx download-images.ts",
     "test:weibo": "tsx test-weibo.ts",
-    "test:weibo:e2e": "tsx test-weibo.ts --e2e"
+    "test:weibo:e2e": "tsx test-weibo.ts --e2e",
+    "test:xhs": "tsx test-xiaohongshu.ts",
+    "test:xhs:e2e": "tsx test-xiaohongshu.ts --e2e"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "playwright": "^1.52.0",
     "tsx": "^4.0.0",
     "typescript": "^5.5.0"
   }

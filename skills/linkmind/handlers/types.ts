@@ -33,8 +33,17 @@ export interface XiaohongshuContent extends CapturedContent {
   };
 }
 
+export type ErrorCode =
+  | "NETWORK"
+  | "AUTH"
+  | "RATE_LIMIT"
+  | "NOT_FOUND"
+  | "PARSE"
+  | "UNKNOWN";
+
 export interface HandlerError {
   error: string;
+  code?: ErrorCode;
   url?: string;
   details?: string;
 }
