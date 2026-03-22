@@ -27,19 +27,23 @@ flowchart LR
     File --> Report["向用户报告结果"]
 ```
 
+
+
 ## 2. 组件职责
 
 ### 2.1 SKILL.md — AI 工作流指令
 
-| 职责 | 说明 |
-|------|------|
-| 意图触发 | 识别"让我记录"等触发词 |
-| 配置读取 | 读取 `config.json`，获取用户 Obsidian Vault 路径 |
-| 平台分发 | 根据 URL 模式判断调用哪个 handler |
-| 深度总结 | 基于 handler 输出的 JSON 生成深度总结（核心观点、关键信息、背景脉络、价值点） |
-| Markdown 生成 | 按模板格式组装 frontmatter + 正文 |
-| 文件写入 | 命名和保存到 Obsidian Vault 的 `LinkMind/` 子目录 |
-| 错误处理 | 向用户报告失败原因和建议 |
+
+| 职责          | 说明                                             |
+| ----------- | ---------------------------------------------- |
+| 意图触发        | 识别"让我记录"等触发词                                   |
+| 配置读取        | 读取 `config.json`，获取用户 Obsidian Vault 路径        |
+| 平台分发        | 根据 URL 模式判断调用哪个 handler                        |
+| 深度总结        | 基于 handler 输出的 JSON 生成深度总结（核心观点、关键信息、背景脉络、价值点） |
+| Markdown 生成 | 按模板格式组装 frontmatter + 正文                       |
+| 文件写入        | 命名和保存到 Obsidian Vault 的 `LinkMind/` 子目录        |
+| 错误处理        | 向用户报告失败原因和建议                                   |
+
 
 ### 2.2 Handler 脚本 — 平台抓取
 
@@ -56,10 +60,14 @@ flowchart TD
     end
 ```
 
-| handler | 抓取方式 | 依赖 |
-|---------|---------|------|
-| `weibo.ts` | `m.weibo.cn` 移动端 JSON API | Node.js 内置 fetch |
-| `xiaohongshu.ts` | Playwright headless browser | playwright |
+
+
+
+| handler          | 抓取方式                        | 依赖               |
+| ---------------- | --------------------------- | ---------------- |
+| `weibo.ts`       | `m.weibo.cn` 移动端 JSON API   | Node.js 内置 fetch |
+| `xiaohongshu.ts` | Playwright headless browser | playwright       |
+
 
 ### 2.3 视频转写脚本 — extract-transcript.ts
 
@@ -80,14 +88,18 @@ flowchart TD
     end
 ```
 
-| 步骤 | 工具 | 说明 |
-|------|------|------|
-| 视频下载 | Node.js fetch | 下载到系统临时目录 |
-| 音频提取 | ffmpeg-static | 提取为 WAV 格式，适配 ASR 输入要求 |
-| ASR（科大讯飞） | 语音转写 API (LFASR) | 支持长音频，返回带时间戳的分段结果 |
-| ASR（OpenAI） | Whisper API | `response_format=verbose_json` 获取时间戳 |
-| SRT 生成 | 内部逻辑 | 将 ASR 时间戳结果格式化为标准 SRT |
-| 清理 | Node.js fs | 删除临时视频和音频文件 |
+
+
+
+| 步骤          | 工具               | 说明                                   |
+| ----------- | ---------------- | ------------------------------------ |
+| 视频下载        | Node.js fetch    | 下载到系统临时目录                            |
+| 音频提取        | ffmpeg-static    | 提取为 WAV 格式，适配 ASR 输入要求               |
+| ASR（科大讯飞）   | 语音转写 API (LFASR) | 支持长音频，返回带时间戳的分段结果                    |
+| ASR（OpenAI） | Whisper API      | `response_format=verbose_json` 获取时间戳 |
+| SRT 生成      | 内部逻辑             | 将 ASR 时间戳结果格式化为标准 SRT                |
+| 清理          | Node.js fs       | 删除临时视频和音频文件                          |
+
 
 **CLI 接口：**
 
@@ -130,14 +142,19 @@ flowchart TD
     end
 ```
 
-| 步骤 | 工具 | 说明 |
-|------|------|------|
-| 读取图片 | AI Agent Read 工具 | 支持 JPEG/PNG/GIF/WebP |
-| 内容分析 | AI Agent 多模态能力 | 提取文字、视觉元素、相关信息 |
-| 结果输出 | SKILL.md 模板 | blockquote 形式附加在每张图片后 |
-| 总结集成 | AI Agent | 图片分析内容作为深度总结的补充输入 |
+
+
+
+| 步骤   | 工具               | 说明                    |
+| ---- | ---------------- | --------------------- |
+| 读取图片 | AI Agent Read 工具 | 支持 JPEG/PNG/GIF/WebP  |
+| 内容分析 | AI Agent 多模态能力   | 提取文字、视觉元素、相关信息        |
+| 结果输出 | SKILL.md 模板      | blockquote 形式附加在每张图片后 |
+| 总结集成 | AI Agent         | 图片分析内容作为深度总结的补充输入     |
+
 
 **特点：**
+
 - 零外部依赖：完全利用 AI Agent 自身能力，无需配置 API 密钥
 - 逐张独立分析：单张失败不影响其他图片
 - 聚焦信息价值：优先提取有意义的文字和数据，简要描述视觉场景
@@ -176,22 +193,26 @@ classDiagram
     CapturedContent <|-- XiaohongshuContent
 ```
 
+
+
 ## 3. 技术选型
 
-| 决策 | 选择 | 理由 |
-|------|------|------|
-| 扩展形式 | Skill（非 Plugin） | 跨平台兼容、轻量、工作流天然适配 |
-| 语言 | TypeScript | 类型安全、Node.js 生态丰富 |
-| TS 运行器 | tsx | 零配置、快速、无需编译步骤 |
-| 微博抓取 | m.weibo.cn 移动端 API | 无需登录、返回 JSON、轻量 |
-| 小红书抓取 | Playwright | 反爬严格需要浏览器渲染 |
-| 音频提取 | ffmpeg-static (npm) | 静态二进制，npm install 自动安装，无需系统级依赖 |
-| ASR — 科大讯飞 | 语音转写 (LFASR) | 中文识别质量高，支持长音频，带时间戳 |
-| ASR — OpenAI | Whisper API | 多语言支持好，API 简洁，作为备选 |
-| 字幕格式 | SRT | 最通用的字幕格式，纯文本、易解析、工具生态丰富 |
-| 输出格式 | Markdown + YAML frontmatter | 通用、可搜索、Obsidian 原生兼容 |
-| 输出目标 | 用户 Obsidian Vault | 与已有知识库融合、支持双向链接和图谱 |
-| 用户配置 | config.json | 轻量、无需额外依赖、AI 可直接读取 |
+
+| 决策           | 选择                          | 理由                             |
+| ------------ | --------------------------- | ------------------------------ |
+| 扩展形式         | Skill（非 Plugin）             | 跨平台兼容、轻量、工作流天然适配               |
+| 语言           | TypeScript                  | 类型安全、Node.js 生态丰富              |
+| TS 运行器       | tsx                         | 零配置、快速、无需编译步骤                  |
+| 微博抓取         | m.weibo.cn 移动端 API          | 无需登录、返回 JSON、轻量                |
+| 小红书抓取        | Playwright                  | 反爬严格需要浏览器渲染                    |
+| 音频提取         | ffmpeg-static (npm)         | 静态二进制，npm install 自动安装，无需系统级依赖 |
+| ASR — 科大讯飞   | 语音转写 (LFASR)                | 中文识别质量高，支持长音频，带时间戳             |
+| ASR — OpenAI | Whisper API                 | 多语言支持好，API 简洁，作为备选             |
+| 字幕格式         | SRT                         | 最通用的字幕格式，纯文本、易解析、工具生态丰富        |
+| 输出格式         | Markdown + YAML frontmatter | 通用、可搜索、Obsidian 原生兼容           |
+| 输出目标         | 用户 Obsidian Vault           | 与已有知识库融合、支持双向链接和图谱             |
+| 用户配置         | config.json                 | 轻量、无需额外依赖、AI 可直接读取             |
+
 
 ## 4. 数据流
 
@@ -238,6 +259,8 @@ sequenceDiagram
     A->>A: 组装 Markdown (frontmatter + 深度总结 + 正文 + 转写 + 图片及分析)
     A-->>U: 保存到 {Vault}/LinkMind/2026-03-22-xxx.md ✓
 ```
+
+
 
 ## 5. 目录结构
 
@@ -299,7 +322,10 @@ flowchart LR
     Clean --> Out["transcript.srt<br/>+ fullText"]
 ```
 
+
+
 **ASR 服务路由逻辑：**
+
 1. 读取 `config.json` 的 `asr` 配置
 2. 根据 `asr.provider` 确定优先服务（默认 `iflytek`）
 3. 优先服务有完整配置 → 使用优先服务
@@ -307,6 +333,7 @@ flowchart LR
 5. 均未配置 → 返回错误，SKILL.md 跳过转写步骤
 
 **SRT 格式示例：**
+
 ```srt
 1
 00:00:00,000 --> 00:00:05,230
@@ -338,14 +365,18 @@ flowchart TD
 
     ChA --> |"npx skills add<br/>tt-bltn/LinkMind"| UserA["用户项目<br/>skills/linkmind/"]
     ChB --> |"clawhub install<br/>linkmind-capture"| UserB["用户项目<br/>skills/linkmind/"]
-    ChC --> |"/plugin marketplace add<br/>tt-bltn/LinkMind"| UserC["Claude Code<br/>Plugin 系统"]
+    ChC --> |"/plugin install<br/>github.com/tt-bltn/LinkMind"| UserC["Claude Code<br/>Plugin 系统"]
 ```
 
-| 渠道 | 安装命令 | 机制 |
-|------|---------|------|
-| OpenClaw CLI | `npx skills add tt-bltn/LinkMind` | 从 GitHub 拉取 skill 目录 |
-| ClawHub Registry | `clawhub install linkmind-capture` | 从 ClawHub 注册表下载已发布的 skill |
-| Claude Code Plugin | `/plugin marketplace add tt-bltn/LinkMind` | 通过 `.claude-plugin/marketplace.json` 注册 |
+
+
+
+| 渠道                 | 安装命令                                       | 机制                                      |
+| ------------------ | ------------------------------------------ | --------------------------------------- |
+| OpenClaw CLI       | `npx skills add tt-bltn/LinkMind`          | 从 GitHub 拉取 skill 目录                    |
+| ClawHub Registry   | `clawhub install linkmind-capture`         | 从 ClawHub 注册表下载已发布的 skill               |
+| Claude Code Plugin | `/plugin install https://github.com/tt-bltn/LinkMind` | 通过 `.claude-plugin/plugin.json` 注册 |
+
 
 ### 7.2 Skill 自包含化
 
@@ -392,31 +423,39 @@ flowchart LR
     current -.->|迁移| target
 ```
 
+
+
 **CDP 核心模块职责：**
 
-| 模块 | 功能 |
-|------|------|
-| Chrome 查找 | 按平台扫描已知路径（macOS/Windows/Linux），定位 Chrome 可执行文件 |
-| CDP 连接 | 启动 Chrome → 等待 debug port 就绪 → WebSocket 连接 |
-| 页面操作 | `Runtime.evaluate`（执行 JS）、`Page.navigate`、`Input.dispatchMouseEvent` |
-| 反检测注入 | `Page.addScriptToEvaluateOnNewDocument` 注入 `navigator.webdriver = undefined` 等 |
+
+| 模块        | 功能                                                                             |
+| --------- | ------------------------------------------------------------------------------ |
+| Chrome 查找 | 按平台扫描已知路径（macOS/Windows/Linux），定位 Chrome 可执行文件                                 |
+| CDP 连接    | 启动 Chrome → 等待 debug port 就绪 → WebSocket 连接                                    |
+| 页面操作      | `Runtime.evaluate`（执行 JS）、`Page.navigate`、`Input.dispatchMouseEvent`           |
+| 反检测注入     | `Page.addScriptToEvaluateOnNewDocument` 注入 `navigator.webdriver = undefined` 等 |
+
 
 **Chrome 查找路径（按平台）：**
 
-| 平台 | 候选路径 |
-|------|---------|
-| macOS | `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` 等 |
-| Windows | `C:\Program Files\Google\Chrome\Application\chrome.exe` 等 |
-| Linux | `/usr/bin/google-chrome`, `/usr/bin/chromium` 等 |
+
+| 平台      | 候选路径                                                             |
+| ------- | ---------------------------------------------------------------- |
+| macOS   | `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` 等 |
+| Windows | `C:\Program Files\Google\Chrome\Application\chrome.exe` 等        |
+| Linux   | `/usr/bin/google-chrome`, `/usr/bin/chromium` 等                  |
+
 
 ### 7.4 配置体系演进
 
-| 配置项 | 当前 | Step 7 目标 |
-|--------|------|------------|
-| Vault 路径 | `config.json` | `config.json`（保持，由安装工具从模板生成） |
-| Cookies | `config.json` | `.env` 文件（敏感信息不进版本控制） |
-| ASR 密钥 | `config.json` | `.env` 文件 |
-| 仓库中的配置 | `config.json`（含真实值） | `config.template.json`（仅模板） |
+
+| 配置项      | 当前                  | Step 7 目标                    |
+| -------- | ------------------- | ---------------------------- |
+| Vault 路径 | `config.json`       | `config.json`（保持，由安装工具从模板生成） |
+| Cookies  | `config.json`       | `.env` 文件（敏感信息不进版本控制）        |
+| ASR 密钥   | `config.json`       | `.env` 文件                    |
+| 仓库中的配置   | `config.json`（含真实值） | `config.template.json`（仅模板）  |
+
 
 **配置优先级：**
 
@@ -424,3 +463,4 @@ flowchart LR
 项目级 .env → 用户级 ~/.linkmind/.env
 项目级 config.json → 用户级 ~/.linkmind/config.json
 ```
+
