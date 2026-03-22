@@ -49,7 +49,8 @@ LinkMind/
 │   └── templates/
 │       └── note.md            # Markdown output template
 ├── .claude-plugin/
-│   └── plugin.json            # Claude Code plugin manifest
+│   ├── plugin.json            # Claude Code plugin manifest
+│   └── marketplace.json       # Claude Code marketplace catalog
 ├── CHANGELOG.md
 └── docs/
     ├── PRD.md                 # Product requirements
@@ -88,6 +89,8 @@ Notes are saved to your Obsidian vault:
 npx clawhub@latest install linkmind-capture
 ```
 
+> **Note:** ClawHub may show a VirusTotal Code Insight warning flagging this skill as "suspicious". This is a false positive caused by patterns that are normal for a web scraping tool — HTTP requests to external sites (Weibo, Xiaohongshu), browser cookie handling, Chrome DevTools Protocol automation (`Runtime.evaluate`), and API key configuration (iFlytek / OpenAI). No credentials are collected or transmitted to third parties; all data stays local. You can review the full source code in `skills/linkmind/scripts/` before installing.
+
 **Option B — OpenClaw manual install:**
 
 ```bash
@@ -107,10 +110,11 @@ cd ~/LinkMind/skills/linkmind/scripts && npm install
 **Option C — Claude Code Plugin:**
 
 ```
-/plugin install https://github.com/tt-bltn/LinkMind
+/plugin marketplace add tt-bltn/LinkMind
+/plugin install linkmind-capture@linkmind
 ```
 
-This installs the plugin directly from GitHub. After installation, follow the post-install prompt to configure your Obsidian vault path.
+First add the marketplace, then install the plugin. Configure your Obsidian vault path after installation.
 
 **Option D — Cursor / other AI agents:**
 

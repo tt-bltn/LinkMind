@@ -365,7 +365,7 @@ flowchart TD
 
     ChA --> |"npx skills add<br/>tt-bltn/LinkMind"| UserA["用户项目<br/>skills/linkmind/"]
     ChB --> |"clawhub install<br/>linkmind-capture"| UserB["用户项目<br/>skills/linkmind/"]
-    ChC --> |"/plugin install<br/>github.com/tt-bltn/LinkMind"| UserC["Claude Code<br/>Plugin 系统"]
+    ChC --> |"/plugin marketplace add<br/>tt-bltn/LinkMind"| UserC["Claude Code<br/>Plugin 系统"]
 ```
 
 
@@ -375,7 +375,7 @@ flowchart TD
 | ------------------ | ------------------------------------------ | --------------------------------------- |
 | OpenClaw CLI       | `npx skills add tt-bltn/LinkMind`          | 从 GitHub 拉取 skill 目录                    |
 | ClawHub Registry   | `clawhub install linkmind-capture`         | 从 ClawHub 注册表下载已发布的 skill               |
-| Claude Code Plugin | `/plugin install https://github.com/tt-bltn/LinkMind` | 通过 `.claude-plugin/plugin.json` 注册 |
+| Claude Code Plugin | `/plugin marketplace add tt-bltn/LinkMind` 后 `/plugin install linkmind-capture@linkmind` | 通过 `.claude-plugin/marketplace.json` + `plugin.json` 注册 |
 
 
 ### 7.2 Skill 自包含化
