@@ -15,8 +15,9 @@ LinkMind will:
 1. Read your Obsidian vault path from `skills/linkmind/config.json`
 2. Identify the platform from the URL
 3. Run a TypeScript handler to extract content (text, images, metadata)
-4. Generate a Markdown file with YAML frontmatter and an AI deep summary
-5. Save it to `{your-vault}/LinkMind/` — ready to browse in Obsidian
+4. Download images and analyze each with AI vision (extract text, visual info)
+5. Generate a Markdown file with YAML frontmatter, AI deep summary, and per-image analysis
+6. Save it to `{your-vault}/LinkMind/` — ready to browse in Obsidian
 
 ## Supported Platforms
 
@@ -31,12 +32,13 @@ LinkMind will:
 LinkMind/
 ├── skills/linkmind/
 │   ├── SKILL.md              # AI workflow instructions
-│   ├── config.json           # User config (vault path, cookies)
+│   ├── config.json           # User config (vault path, cookies, ASR)
 │   ├── handlers/
 │   │   ├── types.ts          # Shared type definitions
 │   │   ├── config.ts         # Config reader
 │   │   ├── retry.ts          # Retry with exponential backoff
 │   │   ├── download-images.ts # Image downloader
+│   │   ├── extract-transcript.ts # Video ASR transcript (audio extraction + ASR + SRT)
 │   │   ├── weibo.ts          # Weibo content extractor
 │   │   └── xiaohongshu.ts    # Xiaohongshu content extractor
 │   └── templates/
@@ -56,7 +58,8 @@ Notes are saved to your Obsidian vault:
     └── attachments/
         └── 2026-03-22-xxx/            # One directory per note
             ├── img-001.jpg
-            └── img-002.png
+            ├── img-002.png
+            └── transcript.srt         # Video transcript (if video + ASR configured)
 ```
 
 ## Features
@@ -64,6 +67,8 @@ Notes are saved to your Obsidian vault:
 - **Multi-platform extraction** — Weibo (mobile API) and Xiaohongshu (Playwright)
 - **AI deep summary** — Structured summary with key takeaways, tailored to content type
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
+- **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
+- **Video ASR transcript** — Extract audio from videos, transcribe via iFlytek or OpenAI Whisper, save as SRT subtitles; transcript text is used in AI summary generation
 - **Cookie support** — Configure login cookies for accessing private or login-gated content
 - **Auto-retry** — Network requests retry with exponential backoff; errors are categorized with actionable suggestions
 
@@ -107,6 +112,35 @@ Add platform cookies to `skills/linkmind/config.json`:
 To obtain cookies: log in to the platform in a browser, open DevTools (F12) →
 Application → Cookies, and copy the relevant values as a semicolon-separated string.
 
+**4. (Optional) Configure ASR for video transcript:**
+
+To enable automatic video-to-text transcription, add ASR credentials:
+
+```json
+{
+  "obsidian_vault": "/Users/yourname/MyVault",
+  "asr": {
+    "provider": "iflytek",
+    "iflytek": {
+      "app_id": "your_app_id",
+      "api_key": "your_api_key",
+      "api_secret": "your_api_secret"
+    },
+    "openai": {
+      "api_key": "sk-xxx",
+      "base_url": "https://api.openai.com/v1"
+    }
+  }
+}
+```
+
+| Provider | How to get credentials |
+|----------|----------------------|
+| iFlytek (科大讯飞) | Register at [xfyun.cn](https://www.xfyun.cn/), create an app, enable "语音转写" service |
+| OpenAI Whisper | Get API key at [platform.openai.com](https://platform.openai.com/api-keys) |
+
+Configure at least one provider. When both are configured, iFlytek is preferred (with OpenAI as fallback). Without ASR configuration, video posts will still be captured but without transcript.
+
 ## Usage
 
 ### With an AI Agent (primary use case)
@@ -144,6 +178,8 @@ platform: weibo
 author: "美食达人"
 original_url: https://weibo.com/xxx/xxx
 captured_at: 2026-03-22T14:30:00.000Z
+has_video: true
+has_transcript: true
 ---
 
 # 成都美食探店推荐
@@ -152,7 +188,7 @@ captured_at: 2026-03-22T14:30:00.000Z
 
 ## 深度总结
 
-（AI 生成的深度总结，包含叙述性段落和关键要点）
+（AI 生成的深度总结，综合原文文字 + 视频转写内容）
 
 **关键要点：**
 - （要点一）
@@ -162,9 +198,17 @@ captured_at: 2026-03-22T14:30:00.000Z
 
 （原始文字内容）
 
+## 视频转写
+
+> 📎 字幕文件：[transcript.srt](attachments/2026-03-22-成都美食探店推荐/transcript.srt)
+
+大家好，今天给大家分享一下成都的美食推荐……
+
 ## 图片
 
 ![图片](attachments/2026-03-22-成都美食探店推荐/img-001.jpg)
+
+> **图片内容：** 一张火锅店外观照片，招牌写着"老成都火锅"，门口有排队的顾客。
 
 ## 元信息
 
@@ -179,6 +223,8 @@ captured_at: 2026-03-22T14:30:00.000Z
 | Step 2 | Weibo handler — full extraction via mobile API | Done |
 | Step 3 | Xiaohongshu handler — Playwright-based extraction | Done |
 | Step 4 | Polish — image download, AI summary tuning, cookies, error handling | Done |
+| Step 5 | Image multimodal — AI vision analysis of images, content extraction for summary | Done |
+| Step 6 | Video ASR — audio extraction, speech-to-text (iFlytek/Whisper), SRT generation | In Progress |
 
 See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 
@@ -187,6 +233,9 @@ See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 - **TypeScript** (ES2022, ESM) with [tsx](https://github.com/privatenumber/tsx) for zero-config execution
 - **Node.js built-in fetch** for Weibo mobile API
 - **Playwright** (Step 3) for Xiaohongshu browser rendering
+- **AI Agent multimodal vision** (Step 5) for image content extraction and OCR
+- **ffmpeg-static** (Step 6) for video-to-audio extraction
+- **iFlytek LFASR / OpenAI Whisper** (Step 6) for speech-to-text transcription
 - **SKILL.md** standard for cross-platform AI agent compatibility
 
 ## Documentation

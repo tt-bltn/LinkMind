@@ -92,19 +92,112 @@ npx tsx skills/linkmind/handlers/download-images.ts \
 
 If the `images` array is empty, skip this step.
 
+## Step 2.6: Analyze image content (multimodal)
+
+If images were successfully downloaded in Step 2.5, analyze each image to extract
+visual content using your multimodal capabilities.
+
+1. For each successfully downloaded image (where the download mapping value is not `null`):
+   a. Read the image file from the local path using the Read tool:
+      `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/img-001.jpg`
+   b. Analyze the image and extract:
+      - **Visible text**: Any readable text, captions, watermarks, labels, or OCR content
+      - **Key visual elements**: Charts, screenshots, UI elements, notable objects
+      - **Contextual information**: Anything that supplements the original post text
+   c. Write a concise description (1-3 sentences) capturing the information value.
+
+2. Store the per-image analysis results — you will use them in two places:
+   - **Step 3 (Markdown)**: Append as a blockquote immediately after each image
+   - **Deep Summary**: Use all image analysis results as supplementary input
+
+**Output format per image (used in the Markdown):**
+
+```markdown
+> **图片内容：** （简要描述图片中的关键信息，包括可见文字和重要视觉元素）
+```
+
+**Analysis guidelines:**
+
+- Focus on **information value** — extract meaningful text and data first,
+  then briefly describe the visual scene.
+- Be specific: include actual text content, numbers, names from the image.
+- Do NOT describe obvious formatting (e.g., "这是一张图片" or "图片显示了文字").
+- If the image is purely decorative with no informational value, write:
+  `> **图片内容：** 装饰性图片，无额外信息内容。`
+- If reading the image fails, write:
+  `> **图片内容：** ⚠️ 图片分析失败`
+
+**Skip conditions (do NOT perform analysis):**
+
+- `images` array is empty → no images to analyze
+- All images failed to download in Step 2.5 → no local files to read
+
+## Step 2.7: Extract video transcript (if applicable)
+
+If the JSON contains a non-null `videoUrl` field **and** the user has configured
+ASR in `config.json`, extract the audio and transcribe it.
+
+1. Ensure the attachments directory exists (same as Step 2.5):
+   `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/`
+2. Run the transcript extraction script:
+
+```bash
+npx tsx skills/linkmind/handlers/extract-transcript.ts \
+  --video-url "<VIDEO_URL>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+```
+
+3. The script outputs JSON to stdout:
+   ```json
+   {
+     "srtPath": "transcript.srt",
+     "fullText": "完整的转写纯文本..."
+   }
+   ```
+   - `srtPath`: the SRT filename saved in the output directory
+   - `fullText`: the complete transcript as plain text (for use in the summary)
+4. If the script outputs an `"error"` field, the transcript extraction failed.
+   **Do NOT abort the entire workflow** — continue to Step 3 without the transcript.
+   Report the error to the user alongside the final result.
+
+**Skip conditions (do NOT run the script):**
+- `videoUrl` is `null` → no video to transcribe
+- `config.json` has no `asr` section, or `asr` fields are empty → ASR not configured;
+  inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 config.json 中配置。"
+
 ## Step 3: Generate the Markdown file
 
-Using the JSON output (and local image paths from Step 2.5), create a Markdown
-file with this structure:
+Using the JSON output, local image paths from Step 2.5, image analysis from
+Step 2.6 (if available), and transcript from Step 2.7 (if available), create
+a Markdown file with this structure.
+
+**YAML frontmatter safety rules:**
+
+String values in YAML frontmatter MUST be properly quoted to avoid parse errors.
+Apply these rules to `title`, `author`, and `original_url`:
+
+1. **Default to single quotes** `'...'` for `title` and `author` — these fields
+   frequently contain characters that break double-quoted YAML strings (Chinese
+   curly quotes `""`, pipes `|`, colons `:`, etc.).
+2. If the value itself contains a single quote `'`, use double quotes `"..."` and
+   backslash-escape any inner double quotes.
+3. Always wrap `original_url` in double quotes `"..."` — URLs contain `?`, `=`,
+   `&` which are special in YAML.
+4. Never leave string values unquoted if they contain any of: `: | ? = & " " ' # [ ] { }`.
 
 ```markdown
 ---
-title: "{title}"
+title: '{title}'
 date: {date}
 platform: {platform}
-author: "{author}"
-original_url: {originalUrl}
+author: '{author}'
+original_url: "{originalUrl}"
 captured_at: {fetchedAt}
+has_video: {true/false}
+has_transcript: {true/false}
+has_image_analysis: {true/false}
 ---
 
 # {title}
@@ -113,16 +206,45 @@ captured_at: {fetchedAt}
 
 ## 深度总结
 
-(Generate the deep summary following the **Deep Summary Guidelines** below.)
+(Generate the deep summary following the **Deep Summary Guidelines** below.
+If image analysis results are available from Step 2.6, incorporate them.
+If a video transcript is available from Step 2.7, incorporate it as well.
+All sources — original text, image analysis, video transcript — should be
+synthesized together.)
 
 ## 原文内容
 
 {text}
 
+## 视频转写
+
+(Only include this section if Step 2.7 produced a transcript.)
+
+> 📎 字幕文件：[transcript.srt](attachments/{date}-{slug}/transcript.srt)
+
+{fullText from extract-transcript.ts output, as-is}
+
+(If Step 2.7 was skipped because videoUrl is null, omit this section entirely.
+If Step 2.7 was skipped because ASR is not configured, add a note:
+"⚠️ 视频转写未执行：ASR 服务未配置。"
+If Step 2.7 failed, add: "⚠️ 视频转写失败：{error message}")
+
 ## 图片
 
-(For each image, use the local path if downloaded, otherwise the remote URL:)
+(For each image, show the image followed by its multimodal analysis from Step 2.6.
+Use the local path if downloaded, otherwise the remote URL:)
+
 ![图片](attachments/{date}-{slug}/img-001.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+![图片](attachments/{date}-{slug}/img-002.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+(If Step 2.6 was skipped because no images exist, omit the 图片 section entirely.
+If an individual image's analysis failed, use:
+> **图片内容：** ⚠️ 图片分析失败)
 
 ## 元信息
 
@@ -150,6 +272,8 @@ After saving, tell the user:
 - The file path where the note was saved (the full Obsidian vault path)
 - The title extracted from the content
 - The platform and author
+- How many images were analyzed and key findings (if image analysis was performed)
+- Whether video transcript was generated (and SRT file location if so)
 - A brief overview of the deep summary
 
 ## Deep Summary Guidelines
@@ -230,7 +354,41 @@ After the structured body, always add 2-3 bullet points:
 - （要点三）
 ```
 
-### 4. Style rules
+### 4. Incorporate image analysis
+
+If Step 2.6 produced image analysis results, treat them as **supplementary input
+alongside the original text** when generating the summary:
+
+- For image-heavy posts (many images with short text), the image content provides
+  essential context — the summary should incorporate visual information such as
+  text extracted from screenshots, data from charts, or scene descriptions.
+- For posts with both substantial text and rich images, synthesize both sources.
+  Mention insights from images where they add value beyond the text.
+- Add a header field when image analysis is available:
+  ```markdown
+  **内容来源：** 文字 + 图片分析
+  ```
+
+### 5. Incorporate video transcript
+
+If Step 2.7 produced a `fullText`, treat it as **primary input alongside the
+original text** when generating the summary:
+
+- For video-heavy posts (short text + long transcript), the transcript is the
+  main content source — the summary should primarily reflect what was said in
+  the video.
+- For posts with both substantial text and transcript, synthesize both sources.
+  Note where information comes from if they differ.
+- Add a header field when transcript is available:
+  ```markdown
+  **内容来源：** 文字 + 视频转写
+  ```
+- If **both** image analysis and video transcript are available:
+  ```markdown
+  **内容来源：** 文字 + 图片分析 + 视频转写
+  ```
+
+### 6. Style rules
 
 - NO narrative paragraphs — use fields, bullets, and tables only.
 - Be specific — include names, numbers, and concrete details from the original.
@@ -270,3 +428,34 @@ If content requires login, users can add platform cookies to
 
 To obtain cookies: log in to the platform in a browser, open DevTools → Application →
 Cookies, and copy the relevant cookie values as a semicolon-separated string.
+
+## ASR configuration (optional — required for video transcript)
+
+To enable video-to-text transcription, configure ASR credentials in
+`skills/linkmind/config.json`:
+
+```json
+{
+  "obsidian_vault": "/path/to/vault",
+  "asr": {
+    "provider": "iflytek",
+    "iflytek": {
+      "app_id": "your_app_id",
+      "api_key": "your_api_key",
+      "api_secret": "your_api_secret"
+    },
+    "openai": {
+      "api_key": "sk-xxx",
+      "base_url": "https://api.openai.com/v1"
+    }
+  }
+}
+```
+
+- `provider`: preferred ASR service — `"iflytek"` (default) or `"openai"`
+- Configure at least one service to enable video transcript
+- If both are configured, the preferred provider is tried first; on failure,
+  the other is used as fallback
+- To obtain iFlytek credentials: register at https://www.xfyun.cn/, create an
+  app, enable "语音转写" service, and copy the App ID / API Key / API Secret
+- To obtain OpenAI key: https://platform.openai.com/api-keys
