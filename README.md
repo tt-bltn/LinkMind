@@ -79,28 +79,6 @@ Notes are saved to your Obsidian vault:
 
 ## Installation
 
-There are three ways to install LinkMind:
-
-**Option A — OpenClaw CLI** (recommended for OpenClaw users):
-
-```bash
-openclaw skills add https://github.com/tt-bltn/LinkMind
-```
-
-**Option B — ClawHub Registry:**
-
-```bash
-npx clawhub@latest install linkmind-capture
-```
-
-**Option C — Claude Code Plugin:**
-
-```
-/plugin marketplace add tt-bltn/LinkMind
-```
-
-**Option D — Manual clone:**
-
 ```bash
 git clone https://github.com/tt-bltn/LinkMind.git
 cd LinkMind/skills/linkmind/scripts
