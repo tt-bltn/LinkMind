@@ -37,8 +37,9 @@ LinkMind/
 │   ├── config.template.json   # 配置模板（复制为 config.json 使用）
 │   ├── scripts/
 │   │   ├── types.ts           # 共享类型定义
-│   │   ├── config.ts          # 配置读取器（.env + config.json）
-│   │   ├── retry.ts           # 指数退避重试
+│   │   ├── setup.ts           # 交互式配置向导
+    │   │   ├── config.ts          # 配置读取器（.env + config.json）
+    │   │   ├── retry.ts           # 指数退避重试
 │   │   ├── chrome-cdp.ts      # Chrome DevTools Protocol 客户端
 │   │   ├── download-images.ts # 图片下载器
 │   │   ├── extract-transcript.ts # 视频 ASR 转写
@@ -137,7 +138,27 @@ cd skills/linkmind/scripts
 npm install
 ```
 
-**2. 配置 Obsidian 知识库路径：**
+**2. 运行交互式配置向导：**
+
+```bash
+npm run setup
+```
+
+向导将引导你完成：
+- **Obsidian 知识库路径**（必填）— 会验证路径是否存在
+- **平台 Cookie**（可选）— 用于获取需要登录的内容
+- **ASR 凭据**（可选）— 用于视频转写（讯飞 / OpenAI Whisper）
+
+非敏感配置写入 `config.json`，凭据写入 `.env`。
+
+可以随时重新运行 `npm run setup` 更新配置。非交互式使用（CI、脚本）：
+
+```bash
+npm run setup -- --vault /Users/yourname/MyVault
+```
+
+<details>
+<summary><strong>手动配置（替代方式）</strong></summary>
 
 ```bash
 cp skills/linkmind/config.template.json skills/linkmind/config.json
@@ -150,8 +171,6 @@ cp skills/linkmind/config.template.json skills/linkmind/config.json
   "obsidian_vault": "/Users/yourname/MyVault"
 }
 ```
-
-**3. （可选）通过 `.env` 配置敏感信息：**
 
 创建 `skills/linkmind/.env` 存放敏感凭据：
 
@@ -167,13 +186,15 @@ LINKMIND_IFLYTEK_API_SECRET=your_api_secret
 LINKMIND_OPENAI_API_KEY=sk-xxx
 ```
 
-也可以将 Cookie 和 ASR 配置写在 `config.json` 中 — 同时设置时环境变量优先。
+同时设置时环境变量优先。
+
+</details>
 
 获取 Cookie：在浏览器中登录平台，打开开发者工具 (F12) → Application → Cookies，复制相关值为分号分隔的字符串。
 
 | ASR 服务商 | 如何获取凭据 |
 |-----------|-----------|
-| 科大讯飞 | 在 [xfyun.cn](https://www.xfyun.cn/) 注册，创建应用，开通"语音转写"服务 |
+| 科大讯飞 | 在 [xfyun.cn](https://www.xfyun.cn/) 注册，创建应用，开通「语音转写」服务 |
 | OpenAI Whisper | 在 [platform.openai.com](https://platform.openai.com/api-keys) 获取 API Key |
 
 至少配置一个 ASR 服务商以启用视频转写。两者都配置时优先使用讯飞（OpenAI 作为备选）。未配置 ASR 时，视频帖子仍会被抓取，但不包含转写内容。

@@ -1,9 +1,10 @@
 {
   "name": "linkmind-scripts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
+    "setup": "tsx setup.ts",
     "typecheck": "tsc --noEmit",
     "weibo": "tsx weibo.ts",
     "xiaohongshu": "tsx xiaohongshu.ts",
@@ -17,5 +18,8 @@
     "@types/node": "^25.5.0",
     "tsx": "^4.0.0",
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.1.0"
   }
 }

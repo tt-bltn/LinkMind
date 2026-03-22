@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-03-22
+
+### Added
+
+- Interactive setup wizard for Obsidian vault path, platform cookies, and ASR credentials (`skills/linkmind/scripts/setup.ts`; run `npm run setup` from `skills/linkmind/scripts`)
+
+### Changed
+
+- Unified release version **0.1.1** for ClawHub (`clawhub publish … --version`), npm package metadata, and Claude Code plugin manifests (`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`)
+
 ## [0.1.0] - 2026-03-22
 
 ### Added
