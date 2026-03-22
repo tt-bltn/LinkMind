@@ -16,6 +16,7 @@ Thumbs.db
 .vscode/
 .idea/
 .claude/
+.cursor/
 
 # TypeScript build output
 dist/
