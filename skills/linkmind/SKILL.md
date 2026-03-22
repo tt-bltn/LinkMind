@@ -12,6 +12,14 @@ triggers:
   - "capture this"
   - "save this link"
 allowed-tools: Shell, Read, Write, Glob, Grep
+metadata:
+  openclaw:
+    requires:
+      bins:
+        - node
+      config:
+        - obsidian_vault
+    homepage: "https://github.com/tt-bltn/LinkMind"
 ---
 
 # LinkMind — Social Media Content Capture
@@ -22,7 +30,14 @@ follow the workflow below.
 ## Step 0: Read configuration
 
 Read the config file at `skills/linkmind/config.json` to get the user's Obsidian
-vault path:
+vault path. If the file does not exist, tell the user:
+
+```
+请先创建配置文件：cp skills/linkmind/config.template.json skills/linkmind/config.json
+然后编辑 config.json，填写你的 Obsidian 知识库路径。
+```
+
+The config file structure:
 
 ```json
 {
@@ -30,9 +45,11 @@ vault path:
 }
 ```
 
-- If the file does not exist or `obsidian_vault` is empty, tell the user:
-  "请先在 `skills/linkmind/config.json` 中配置你的 Obsidian 知识库路径。"
-  and provide the example JSON above.
+Sensitive credentials (cookies, ASR keys) can also be set via environment
+variables in `skills/linkmind/.env` — these override values in `config.json`.
+See the Cookie and ASR configuration sections below for details.
+
+- If `obsidian_vault` is empty, ask the user to configure it.
 - Verify the vault directory exists. If not, inform the user that the path is invalid.
 - The output directory is `{obsidian_vault}/LinkMind/`. Create it if it does not exist.
 
@@ -50,17 +67,17 @@ If the URL does not match any supported platform, tell the user:
 
 ## Step 2: Run the handler script
 
-The handler scripts live at `skills/linkmind/handlers/`.
-Run the corresponding handler from the project root:
+The scripts live at `skills/linkmind/scripts/`.
+Run the corresponding script from the project root:
 
 **Weibo:**
 ```bash
-npx tsx skills/linkmind/handlers/weibo.ts "<URL>" --config skills/linkmind/config.json
+npx tsx skills/linkmind/scripts/weibo.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 **Xiaohongshu:**
 ```bash
-npx tsx skills/linkmind/handlers/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
+npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
@@ -78,7 +95,7 @@ locally so the note is fully viewable offline in Obsidian.
 3. Run the download script:
 
 ```bash
-npx tsx skills/linkmind/handlers/download-images.ts \
+npx tsx skills/linkmind/scripts/download-images.ts \
   --urls "{comma-separated image URLs}" \
   --output-dir "{attachments directory}" \
   --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
@@ -142,7 +159,7 @@ ASR in `config.json`, extract the audio and transcribe it.
 2. Run the transcript extraction script:
 
 ```bash
-npx tsx skills/linkmind/handlers/extract-transcript.ts \
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
   --video-url "<VIDEO_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
@@ -278,125 +295,12 @@ After saving, tell the user:
 
 ## Deep Summary Guidelines
 
-When writing the "深度总结" section, follow these rules:
+Read and follow the full guidelines in
+`skills/linkmind/references/deep-summary-guide.md`.
 
-### 1. Classify the content type
-
-First, silently determine which category the content falls into:
-
-| Type | Signals |
-|------|---------|
-| **观点/分析** | Opinion piece, commentary, hot take, editorial |
-| **教程/攻略** | How-to, step-by-step, tips, guide |
-| **新闻/事件** | Breaking news, event report, announcement |
-| **个人故事** | Personal experience, diary, travel log |
-| **产品/测评** | Product review, comparison, unboxing |
-| **清单/推荐** | List post, recommendations, resources |
-
-### 2. Write a structured summary
-
-Use **structured fields + bullet points / tables**, NOT narrative paragraphs.
-All text in **Chinese**. Use third-person perspective, NOT AI perspective
-("我为您总结了…"). Every summary must contain the following header fields:
-
-```markdown
-**内容类型：** （类型标签，如 教程/攻略、观点/分析 等）
-**核心主题：** （一句话概括，≤30 字）
-```
-
-Then, based on content type, add the structured body below the header fields.
-Choose the most appropriate format for the content:
-
-#### Format A: Table — for lists, comparisons, tech stacks, recommendations
-
-Use when the original content enumerates items with clear attributes.
-
-```markdown
-**选型/清单：**
-
-| 分类 | 工具/选项 | 关键理由 |
-|------|-----------|----------|
-| … | … | … |
-```
-
-#### Format B: Steps — for tutorials, guides, workflows
-
-Use when the original content describes a sequential process.
-
-```markdown
-**流程/步骤：**
-
-1. **步骤名** — 简要说明
-2. **步骤名** — 简要说明
-3. …
-```
-
-#### Format C: Bullet points — for opinions, stories, news, reviews
-
-Use for content that doesn't fit a table or steps format.
-
-```markdown
-**要点：**
-
-- **论点/事件/观点** — 展开说明（一句话）
-- **论点/事件/观点** — 展开说明（一句话）
-- …
-```
-
-### 3. Add key takeaways
-
-After the structured body, always add 2-3 bullet points:
-
-```markdown
-**关键要点：**
-- （要点一）
-- （要点二）
-- （要点三）
-```
-
-### 4. Incorporate image analysis
-
-If Step 2.6 produced image analysis results, treat them as **supplementary input
-alongside the original text** when generating the summary:
-
-- For image-heavy posts (many images with short text), the image content provides
-  essential context — the summary should incorporate visual information such as
-  text extracted from screenshots, data from charts, or scene descriptions.
-- For posts with both substantial text and rich images, synthesize both sources.
-  Mention insights from images where they add value beyond the text.
-- Add a header field when image analysis is available:
-  ```markdown
-  **内容来源：** 文字 + 图片分析
-  ```
-
-### 5. Incorporate video transcript
-
-If Step 2.7 produced a `fullText`, treat it as **primary input alongside the
-original text** when generating the summary:
-
-- For video-heavy posts (short text + long transcript), the transcript is the
-  main content source — the summary should primarily reflect what was said in
-  the video.
-- For posts with both substantial text and transcript, synthesize both sources.
-  Note where information comes from if they differ.
-- Add a header field when transcript is available:
-  ```markdown
-  **内容来源：** 文字 + 视频转写
-  ```
-- If **both** image analysis and video transcript are available:
-  ```markdown
-  **内容来源：** 文字 + 图片分析 + 视频转写
-  ```
-
-### 6. Style rules
-
-- NO narrative paragraphs — use fields, bullets, and tables only.
-- Be specific — include names, numbers, and concrete details from the original.
-- Keep each bullet to 1-2 sentences max.
-- Do NOT pad with filler phrases like "总的来说" or "值得一提的是".
-- Do NOT repeat the title verbatim in the summary.
-- If the original content mixes formats (e.g., steps + a list of tools),
-  combine Format A and B as needed.
+Key points: classify the content type (观点/教程/新闻/故事/测评/清单),
+write structured fields + bullets/tables in Chinese, add 2-3 key takeaways,
+incorporate image analysis and video transcript when available.
 
 ## Error handling
 
@@ -413,8 +317,16 @@ original text** when generating the summary:
 
 ## Cookie configuration (optional)
 
-If content requires login, users can add platform cookies to
-`skills/linkmind/config.json`:
+If content requires login, configure platform cookies using **either** method:
+
+**Method A — Environment variables** (recommended, in `skills/linkmind/.env`):
+
+```bash
+LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
+LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
+```
+
+**Method B — config.json:**
 
 ```json
 {
@@ -426,13 +338,25 @@ If content requires login, users can add platform cookies to
 }
 ```
 
+Environment variables take precedence over `config.json` values.
+
 To obtain cookies: log in to the platform in a browser, open DevTools → Application →
 Cookies, and copy the relevant cookie values as a semicolon-separated string.
 
 ## ASR configuration (optional — required for video transcript)
 
-To enable video-to-text transcription, configure ASR credentials in
-`skills/linkmind/config.json`:
+Configure ASR credentials using **either** method:
+
+**Method A — Environment variables** (recommended, in `skills/linkmind/.env`):
+
+```bash
+LINKMIND_IFLYTEK_APP_ID=your_app_id
+LINKMIND_IFLYTEK_API_KEY=your_api_key
+LINKMIND_IFLYTEK_API_SECRET=your_api_secret
+LINKMIND_OPENAI_API_KEY=sk-xxx
+```
+
+**Method B — config.json:**
 
 ```json
 {

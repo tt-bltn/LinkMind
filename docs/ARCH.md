@@ -322,3 +322,105 @@ flowchart LR
 在 handler 中增加图片下载逻辑，或在 SKILL.md 中指导 AI 使用 curl 下载。
 图片保存到 Obsidian Vault 的 `LinkMind/attachments/{date}-{slug}/` 子目录，
 Markdown 中使用相对路径引用，确保 Obsidian 内可正常显示。
+
+## 7. 分发与安装架构（Step 7）
+
+### 7.1 分发渠道
+
+LinkMind 作为一个 SKILL.md 标准的 AI Agent Skill，支持三条安装渠道，
+仓库本身即为可分发单元，无需发布到 npm。
+
+```mermaid
+flowchart TD
+    Repo["GitHub 仓库<br/>tt-bltn/LinkMind"] --> ChA["渠道 A：OpenClaw CLI"]
+    Repo --> ChB["渠道 B：ClawHub Registry"]
+    Repo --> ChC["渠道 C：Claude Code Plugin"]
+
+    ChA --> |"npx skills add<br/>tt-bltn/LinkMind"| UserA["用户项目<br/>skills/linkmind/"]
+    ChB --> |"clawhub install<br/>linkmind-capture"| UserB["用户项目<br/>skills/linkmind/"]
+    ChC --> |"/plugin marketplace add<br/>tt-bltn/LinkMind"| UserC["Claude Code<br/>Plugin 系统"]
+```
+
+| 渠道 | 安装命令 | 机制 |
+|------|---------|------|
+| OpenClaw CLI | `npx skills add tt-bltn/LinkMind` | 从 GitHub 拉取 skill 目录 |
+| ClawHub Registry | `clawhub install linkmind-capture` | 从 ClawHub 注册表下载已发布的 skill |
+| Claude Code Plugin | `/plugin marketplace add tt-bltn/LinkMind` | 通过 `.claude-plugin/marketplace.json` 注册 |
+
+### 7.2 Skill 自包含化
+
+分发后 `skills/linkmind/` 必须可独立运行。关键改动：
+
+```
+skills/linkmind/                 # 可独立分发的单元
+├── SKILL.md                     # AI 指令（含 metadata.openclaw）
+├── config.template.json         # 配置模板（不含真实值）
+├── scripts/                     # 重命名自 handlers/
+│   ├── package.json
+│   ├── types.ts
+│   ├── config.ts
+│   ├── retry.ts
+│   ├── weibo.ts
+│   ├── xiaohongshu.ts
+│   ├── download-images.ts
+│   └── extract-transcript.ts
+├── references/                  # SKILL.md 拆分出的参考文档
+│   └── deep-summary-guide.md
+└── templates/
+    └── note.md
+```
+
+### 7.3 Chrome CDP 替代 Playwright
+
+小红书抓取从 Playwright 迁移到 Chrome DevTools Protocol，消除 Chromium 下载依赖。
+
+```mermaid
+flowchart LR
+    subgraph current ["当前方案（Playwright）"]
+        PW_Install["npm install playwright<br/>→ 下载 Chromium ~200MB"]
+        PW_Launch["playwright.chromium.launch()"]
+        PW_Eval["page.evaluate()"]
+    end
+
+    subgraph target ["目标方案（Chrome CDP）"]
+        CDP_Find["查找系统 Chrome<br/>（已安装，0 下载）"]
+        CDP_Launch["spawn chrome<br/>--remote-debugging-port"]
+        CDP_WS["WebSocket 连接<br/>CDP 协议"]
+        CDP_Eval["Runtime.evaluate"]
+    end
+
+    current -.->|迁移| target
+```
+
+**CDP 核心模块职责：**
+
+| 模块 | 功能 |
+|------|------|
+| Chrome 查找 | 按平台扫描已知路径（macOS/Windows/Linux），定位 Chrome 可执行文件 |
+| CDP 连接 | 启动 Chrome → 等待 debug port 就绪 → WebSocket 连接 |
+| 页面操作 | `Runtime.evaluate`（执行 JS）、`Page.navigate`、`Input.dispatchMouseEvent` |
+| 反检测注入 | `Page.addScriptToEvaluateOnNewDocument` 注入 `navigator.webdriver = undefined` 等 |
+
+**Chrome 查找路径（按平台）：**
+
+| 平台 | 候选路径 |
+|------|---------|
+| macOS | `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` 等 |
+| Windows | `C:\Program Files\Google\Chrome\Application\chrome.exe` 等 |
+| Linux | `/usr/bin/google-chrome`, `/usr/bin/chromium` 等 |
+
+### 7.4 配置体系演进
+
+| 配置项 | 当前 | Step 7 目标 |
+|--------|------|------------|
+| Vault 路径 | `config.json` | `config.json`（保持，由安装工具从模板生成） |
+| Cookies | `config.json` | `.env` 文件（敏感信息不进版本控制） |
+| ASR 密钥 | `config.json` | `.env` 文件 |
+| 仓库中的配置 | `config.json`（含真实值） | `config.template.json`（仅模板） |
+
+**配置优先级：**
+
+```
+项目级 .env → 用户级 ~/.linkmind/.env
+项目级 config.json → 用户级 ~/.linkmind/config.json
+```

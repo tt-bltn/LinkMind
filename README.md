@@ -14,7 +14,7 @@ LinkMind will:
 
 1. Read your Obsidian vault path from `skills/linkmind/config.json`
 2. Identify the platform from the URL
-3. Run a TypeScript handler to extract content (text, images, metadata)
+3. Run a TypeScript script to extract content (text, images, metadata)
 4. Download images and analyze each with AI vision (extract text, visual info)
 5. Generate a Markdown file with YAML frontmatter, AI deep summary, and per-image analysis
 6. Save it to `{your-vault}/LinkMind/` — ready to browse in Obsidian
@@ -24,29 +24,34 @@ LinkMind will:
 | Platform | URL Patterns | Extraction Method |
 |----------|-------------|-------------------|
 | Weibo | `weibo.com`, `m.weibo.cn` | Mobile API (`m.weibo.cn`) |
-| Xiaohongshu | `xiaohongshu.com`, `xhslink.com` | Playwright headless browser |
+| Xiaohongshu | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
 
 ## Project Structure
 
 ```
 LinkMind/
-├── skills/linkmind/
-│   ├── SKILL.md              # AI workflow instructions
-│   ├── config.json           # User config (vault path, cookies, ASR)
-│   ├── handlers/
-│   │   ├── types.ts          # Shared type definitions
-│   │   ├── config.ts         # Config reader
-│   │   ├── retry.ts          # Retry with exponential backoff
+├── skills/linkmind/           # Self-contained distributable skill
+│   ├── SKILL.md               # AI workflow instructions (with OpenClaw metadata)
+│   ├── config.template.json   # Config template (copy to config.json)
+│   ├── scripts/
+│   │   ├── types.ts           # Shared type definitions
+│   │   ├── config.ts          # Config reader (.env + config.json)
+│   │   ├── retry.ts           # Retry with exponential backoff
+│   │   ├── chrome-cdp.ts      # Chrome DevTools Protocol client
 │   │   ├── download-images.ts # Image downloader
-│   │   ├── extract-transcript.ts # Video ASR transcript (audio extraction + ASR + SRT)
-│   │   ├── weibo.ts          # Weibo content extractor
-│   │   └── xiaohongshu.ts    # Xiaohongshu content extractor
+│   │   ├── extract-transcript.ts # Video ASR transcript
+│   │   ├── weibo.ts           # Weibo content extractor
+│   │   └── xiaohongshu.ts     # Xiaohongshu content extractor (CDP)
+│   ├── references/
+│   │   └── deep-summary-guide.md
 │   └── templates/
-│       └── note.md           # Markdown output template
+│       └── note.md            # Markdown output template
+├── .claude-plugin/
+│   └── marketplace.json       # Claude Code plugin registration
 └── docs/
-    ├── PRD.md                # Product requirements
-    ├── ARCH.md               # Architecture & data flow diagrams
-    └── PROJECT_STATE.md      # Development progress tracker
+    ├── PRD.md                 # Product requirements
+    ├── ARCH.md                # Architecture & data flow diagrams
+    └── PROJECT_STATE.md       # Development progress tracker
 ```
 
 Notes are saved to your Obsidian vault:
@@ -64,7 +69,7 @@ Notes are saved to your Obsidian vault:
 
 ## Features
 
-- **Multi-platform extraction** — Weibo (mobile API) and Xiaohongshu (Playwright)
+- **Multi-platform extraction** — Weibo (mobile API) and Xiaohongshu (Chrome CDP)
 - **AI deep summary** — Structured summary with key takeaways, tailored to content type
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
 - **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
@@ -72,20 +77,54 @@ Notes are saved to your Obsidian vault:
 - **Cookie support** — Configure login cookies for accessing private or login-gated content
 - **Auto-retry** — Network requests retry with exponential backoff; errors are categorized with actionable suggestions
 
+## Installation
+
+There are three ways to install LinkMind:
+
+**Option A — OpenClaw CLI** (recommended for OpenClaw users):
+
+```bash
+openclaw skills add https://github.com/tt-bltn/LinkMind
+```
+
+**Option B — ClawHub Registry:**
+
+```bash
+npx clawhub@latest install linkmind-capture
+```
+
+**Option C — Claude Code Plugin:**
+
+```
+/plugin marketplace add tt-bltn/LinkMind
+```
+
+**Option D — Manual clone:**
+
+```bash
+git clone https://github.com/tt-bltn/LinkMind.git
+cd LinkMind/skills/linkmind/scripts
+npm install
+```
+
 ## Setup
 
-Requires **Node.js >= 22**.
+Requires **Node.js >= 22** and **Google Chrome** (for Xiaohongshu extraction).
 
 **1. Install dependencies:**
 
 ```bash
-cd skills/linkmind/handlers
+cd skills/linkmind/scripts
 npm install
 ```
 
 **2. Configure your Obsidian vault path:**
 
-Create (or edit) `skills/linkmind/config.json`:
+```bash
+cp skills/linkmind/config.template.json skills/linkmind/config.json
+```
+
+Edit `skills/linkmind/config.json` and set your vault path:
 
 ```json
 {
@@ -93,53 +132,33 @@ Create (or edit) `skills/linkmind/config.json`:
 }
 ```
 
-Replace the path with the absolute path to your Obsidian vault directory.
+**3. (Optional) Configure secrets via `.env`:**
 
-**3. (Optional) Configure cookies for login-gated content:**
+Create `skills/linkmind/.env` for sensitive credentials:
 
-Add platform cookies to `skills/linkmind/config.json`:
+```bash
+# Platform cookies (for login-gated content)
+LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
+LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
 
-```json
-{
-  "obsidian_vault": "/Users/yourname/MyVault",
-  "cookies": {
-    "weibo": "SUB=xxx; SUBP=yyy",
-    "xiaohongshu": "a1=xxx; web_session=yyy"
-  }
-}
+# ASR credentials (for video transcript)
+LINKMIND_IFLYTEK_APP_ID=your_app_id
+LINKMIND_IFLYTEK_API_KEY=your_api_key
+LINKMIND_IFLYTEK_API_SECRET=your_api_secret
+LINKMIND_OPENAI_API_KEY=sk-xxx
 ```
+
+Alternatively, you can still put cookies and ASR config in `config.json` — environment variables take precedence when both are set.
 
 To obtain cookies: log in to the platform in a browser, open DevTools (F12) →
 Application → Cookies, and copy the relevant values as a semicolon-separated string.
 
-**4. (Optional) Configure ASR for video transcript:**
-
-To enable automatic video-to-text transcription, add ASR credentials:
-
-```json
-{
-  "obsidian_vault": "/Users/yourname/MyVault",
-  "asr": {
-    "provider": "iflytek",
-    "iflytek": {
-      "app_id": "your_app_id",
-      "api_key": "your_api_key",
-      "api_secret": "your_api_secret"
-    },
-    "openai": {
-      "api_key": "sk-xxx",
-      "base_url": "https://api.openai.com/v1"
-    }
-  }
-}
-```
-
-| Provider | How to get credentials |
+| ASR Provider | How to get credentials |
 |----------|----------------------|
 | iFlytek (科大讯飞) | Register at [xfyun.cn](https://www.xfyun.cn/), create an app, enable "语音转写" service |
 | OpenAI Whisper | Get API key at [platform.openai.com](https://platform.openai.com/api-keys) |
 
-Configure at least one provider. When both are configured, iFlytek is preferred (with OpenAI as fallback). Without ASR configuration, video posts will still be captured but without transcript.
+Configure at least one ASR provider to enable video transcript. When both are configured, iFlytek is preferred (with OpenAI as fallback). Without ASR configuration, video posts will still be captured but without transcript.
 
 ## Usage
 
@@ -152,10 +171,10 @@ The AI reads `skills/linkmind/SKILL.md` and knows how to:
 - Dispatch to the correct platform handler
 - Generate a Markdown note with deep summary and save it to your Obsidian vault
 
-### Standalone handler testing
+### Standalone script testing
 
 ```bash
-cd skills/linkmind/handlers
+cd skills/linkmind/scripts
 
 # Weibo
 npx tsx weibo.ts "https://m.weibo.cn/detail/4331051486294436"
@@ -164,7 +183,7 @@ npx tsx weibo.ts "https://m.weibo.cn/detail/4331051486294436"
 npx tsx xiaohongshu.ts "https://www.xiaohongshu.com/explore/6a7b8c9d0e1f"
 ```
 
-Handlers output JSON to stdout, which the AI agent consumes to generate the final Markdown file.
+Scripts output JSON to stdout, which the AI agent consumes to generate the final Markdown file.
 
 ## Output Format
 
@@ -225,6 +244,7 @@ has_transcript: true
 | Step 4 | Polish — image download, AI summary tuning, cookies, error handling | Done |
 | Step 5 | Image multimodal — AI vision analysis of images, content extraction for summary | Done |
 | Step 6 | Video ASR — audio extraction, speech-to-text (iFlytek/Whisper), SRT generation | In Progress |
+| Step 7 | Distribution — OpenClaw/ClawHub/Claude Code install, Chrome CDP, .env config | Done |
 
 See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 
@@ -232,11 +252,11 @@ See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 
 - **TypeScript** (ES2022, ESM) with [tsx](https://github.com/privatenumber/tsx) for zero-config execution
 - **Node.js built-in fetch** for Weibo mobile API
-- **Playwright** (Step 3) for Xiaohongshu browser rendering
-- **AI Agent multimodal vision** (Step 5) for image content extraction and OCR
-- **ffmpeg-static** (Step 6) for video-to-audio extraction
-- **iFlytek LFASR / OpenAI Whisper** (Step 6) for speech-to-text transcription
-- **SKILL.md** standard for cross-platform AI agent compatibility
+- **Chrome DevTools Protocol** for Xiaohongshu (uses system Chrome, zero extra download)
+- **AI Agent multimodal vision** for image content extraction and OCR
+- **ffmpeg-static** for video-to-audio extraction
+- **iFlytek LFASR / OpenAI Whisper** for speech-to-text transcription
+- **SKILL.md** standard for cross-platform AI agent compatibility (OpenClaw / Cursor / Claude Code)
 
 ## Documentation
 
