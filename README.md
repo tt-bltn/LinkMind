@@ -37,8 +37,9 @@ LinkMind/
 │   ├── config.template.json   # Config template (copy to config.json)
 │   ├── scripts/
 │   │   ├── types.ts           # Shared type definitions
-│   │   ├── config.ts          # Config reader (.env + config.json)
-│   │   ├── retry.ts           # Retry with exponential backoff
+│   │   ├── setup.ts           # Interactive setup wizard
+    │   │   ├── config.ts          # Config reader (.env + config.json)
+    │   │   ├── retry.ts           # Retry with exponential backoff
 │   │   ├── chrome-cdp.ts      # Chrome DevTools Protocol client
 │   │   ├── download-images.ts # Image downloader
 │   │   ├── extract-transcript.ts # Video ASR transcript
@@ -137,7 +138,27 @@ cd skills/linkmind/scripts
 npm install
 ```
 
-**2. Configure your Obsidian vault path:**
+**2. Run the interactive setup wizard:**
+
+```bash
+npm run setup
+```
+
+The wizard will guide you through:
+- **Obsidian vault path** (required) — validates the path exists
+- **Platform cookies** (optional) — for accessing login-gated content
+- **ASR credentials** (optional) — for video transcript (iFlytek / OpenAI Whisper)
+
+Non-sensitive config is written to `config.json`, credentials go to `.env`.
+
+You can re-run `npm run setup` at any time to update your configuration. For non-interactive use (CI, scripts):
+
+```bash
+npm run setup -- --vault /Users/yourname/MyVault
+```
+
+<details>
+<summary><strong>Manual configuration (alternative)</strong></summary>
 
 ```bash
 cp skills/linkmind/config.template.json skills/linkmind/config.json
@@ -150,8 +171,6 @@ Edit `skills/linkmind/config.json` and set your vault path:
   "obsidian_vault": "/Users/yourname/MyVault"
 }
 ```
-
-**3. (Optional) Configure secrets via `.env`:**
 
 Create `skills/linkmind/.env` for sensitive credentials:
 
@@ -167,7 +186,9 @@ LINKMIND_IFLYTEK_API_SECRET=your_api_secret
 LINKMIND_OPENAI_API_KEY=sk-xxx
 ```
 
-Alternatively, you can still put cookies and ASR config in `config.json` — environment variables take precedence when both are set.
+Environment variables take precedence over `config.json` values.
+
+</details>
 
 To obtain cookies: log in to the platform in a browser, open DevTools (F12) →
 Application → Cookies, and copy the relevant values as a semicolon-separated string.

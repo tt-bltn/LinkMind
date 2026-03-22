@@ -33,9 +33,11 @@ Read the config file at `skills/linkmind/config.json` to get the user's Obsidian
 vault path. If the file does not exist, tell the user:
 
 ```
-请先创建配置文件：cp skills/linkmind/config.template.json skills/linkmind/config.json
-然后编辑 config.json，填写你的 Obsidian 知识库路径。
+请先运行配置向导：cd skills/linkmind/scripts && npm run setup
 ```
+
+This runs an interactive wizard that guides the user through setting their
+Obsidian vault path, platform cookies, and ASR credentials.
 
 The config file structure:
 
