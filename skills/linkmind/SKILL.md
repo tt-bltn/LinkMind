@@ -55,20 +55,47 @@ Run the corresponding handler from the project root:
 
 **Weibo:**
 ```bash
-npx tsx skills/linkmind/handlers/weibo.ts "<URL>"
+npx tsx skills/linkmind/handlers/weibo.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 **Xiaohongshu:**
 ```bash
-npx tsx skills/linkmind/handlers/xiaohongshu.ts "<URL>"
+npx tsx skills/linkmind/handlers/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
-the extraction failed — analyze the error message and inform the user.
+the extraction failed — check the `"code"` field for the error category
+(`NETWORK`, `AUTH`, `RATE_LIMIT`, `NOT_FOUND`, `PARSE`, `UNKNOWN`) and the
+`"details"` field for a user-friendly suggestion. Report both to the user.
+
+## Step 2.5: Download images to vault
+
+If the JSON contains an `images` array with one or more URLs, download them
+locally so the note is fully viewable offline in Obsidian.
+
+1. Determine the slug (see file naming rules in Step 3).
+2. Set the attachments directory: `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/`
+3. Run the download script:
+
+```bash
+npx tsx skills/linkmind/handlers/download-images.ts \
+  --urls "{comma-separated image URLs}" \
+  --output-dir "{attachments directory}" \
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+```
+
+4. The script outputs a JSON mapping: `{ "original_url": "img-001.jpg", ... }`.
+   A `null` value means that image failed to download.
+5. For successfully downloaded images, use the relative path in Markdown:
+   `![image](attachments/{date}-{slug}/img-001.jpg)`
+6. For failed downloads, fall back to the original remote URL.
+
+If the `images` array is empty, skip this step.
 
 ## Step 3: Generate the Markdown file
 
-Using the JSON output, create a Markdown file with this structure:
+Using the JSON output (and local image paths from Step 2.5), create a Markdown
+file with this structure:
 
 ```markdown
 ---
@@ -82,27 +109,24 @@ captured_at: {fetchedAt}
 
 # {title}
 
-> Source: {platform display name} @{author} | {date}
+> 来源：{platform display name} @{author} | {date}
 
 ## 深度总结
 
-(Write a deep summary of the content in Chinese. Cover: core viewpoints,
-key information, background context, and value points. The summary should
-help the reader fully understand the content without reading the original.
-Aim for a thorough analysis, not just a brief 2-4 sentence recap.)
+(Generate the deep summary following the **Deep Summary Guidelines** below.)
 
-## Original Content
+## 原文内容
 
 {text}
 
-## Images
+## 图片
 
-(For each image URL, include it as a Markdown image:)
-![image]({imageUrl})
+(For each image, use the local path if downloaded, otherwise the remote URL:)
+![图片](attachments/{date}-{slug}/img-001.jpg)
 
-## Metadata
+## 元信息
 
-- Reposts: {stats.reposts} | Comments: {stats.comments} | Likes: {stats.likes}
+- 转发: {stats.reposts} | 评论: {stats.comments} | 点赞: {stats.likes}
 ```
 
 ### File naming
@@ -128,10 +152,121 @@ After saving, tell the user:
 - The platform and author
 - A brief overview of the deep summary
 
+## Deep Summary Guidelines
+
+When writing the "深度总结" section, follow these rules:
+
+### 1. Classify the content type
+
+First, silently determine which category the content falls into:
+
+| Type | Signals |
+|------|---------|
+| **观点/分析** | Opinion piece, commentary, hot take, editorial |
+| **教程/攻略** | How-to, step-by-step, tips, guide |
+| **新闻/事件** | Breaking news, event report, announcement |
+| **个人故事** | Personal experience, diary, travel log |
+| **产品/测评** | Product review, comparison, unboxing |
+| **清单/推荐** | List post, recommendations, resources |
+
+### 2. Write a structured summary
+
+Use **structured fields + bullet points / tables**, NOT narrative paragraphs.
+All text in **Chinese**. Use third-person perspective, NOT AI perspective
+("我为您总结了…"). Every summary must contain the following header fields:
+
+```markdown
+**内容类型：** （类型标签，如 教程/攻略、观点/分析 等）
+**核心主题：** （一句话概括，≤30 字）
+```
+
+Then, based on content type, add the structured body below the header fields.
+Choose the most appropriate format for the content:
+
+#### Format A: Table — for lists, comparisons, tech stacks, recommendations
+
+Use when the original content enumerates items with clear attributes.
+
+```markdown
+**选型/清单：**
+
+| 分类 | 工具/选项 | 关键理由 |
+|------|-----------|----------|
+| … | … | … |
+```
+
+#### Format B: Steps — for tutorials, guides, workflows
+
+Use when the original content describes a sequential process.
+
+```markdown
+**流程/步骤：**
+
+1. **步骤名** — 简要说明
+2. **步骤名** — 简要说明
+3. …
+```
+
+#### Format C: Bullet points — for opinions, stories, news, reviews
+
+Use for content that doesn't fit a table or steps format.
+
+```markdown
+**要点：**
+
+- **论点/事件/观点** — 展开说明（一句话）
+- **论点/事件/观点** — 展开说明（一句话）
+- …
+```
+
+### 3. Add key takeaways
+
+After the structured body, always add 2-3 bullet points:
+
+```markdown
+**关键要点：**
+- （要点一）
+- （要点二）
+- （要点三）
+```
+
+### 4. Style rules
+
+- NO narrative paragraphs — use fields, bullets, and tables only.
+- Be specific — include names, numbers, and concrete details from the original.
+- Keep each bullet to 1-2 sentences max.
+- Do NOT pad with filler phrases like "总的来说" or "值得一提的是".
+- Do NOT repeat the title verbatim in the summary.
+- If the original content mixes formats (e.g., steps + a list of tools),
+  combine Format A and B as needed.
+
 ## Error handling
 
 - If the handler script fails, report the error to the user clearly.
-- If the URL requires login (HTTP 403 or similar), inform the user that the
-  content may be private/login-required.
+- Use the `code` field to tailor your response:
+  - `NETWORK` — suggest checking network and retrying
+  - `AUTH` — tell the user the content may require login; suggest configuring
+    cookies (see below)
+  - `RATE_LIMIT` — suggest waiting a few minutes before retrying
+  - `NOT_FOUND` — ask the user to verify the link is correct
+  - `PARSE` — the platform structure may have changed; suggest reporting the issue
 - If a timeout occurs, suggest the user try again later.
 - Never silently fail — always give the user feedback.
+
+## Cookie configuration (optional)
+
+If content requires login, users can add platform cookies to
+`skills/linkmind/config.json`:
+
+```json
+{
+  "obsidian_vault": "/path/to/vault",
+  "cookies": {
+    "weibo": "SUB=xxx; SUBP=yyy",
+    "xiaohongshu": "a1=xxx; web_session=yyy"
+  }
+}
+```
+
+To obtain cookies: log in to the platform in a browser, open DevTools → Application →
+Cookies, and copy the relevant cookie values as a semicolon-separated string.

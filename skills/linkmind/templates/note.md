@@ -22,8 +22,10 @@ captured_at: {{fetchedAt}}
 ## 图片
 
 {{#each images}}
-![图片]({{this}})
+![图片](attachments/{{date}}-{{slug}}/{{this.localFilename}})
 {{/each}}
+
+(If an image was not downloaded, fall back to the remote URL.)
 
 ## 元信息
 

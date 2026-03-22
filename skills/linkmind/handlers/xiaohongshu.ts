@@ -8,7 +8,9 @@
 
 import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import type { XiaohongshuContent, HandlerError } from "./types.js";
+import type { XiaohongshuContent, HandlerError, ErrorCode } from "./types.js";
+import { withRetry, isRetryableError } from "./retry.js";
+import { loadConfig, parseConfigArg } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,8 +46,9 @@ export function extractNoteId(url: string): string {
   }
 
   if (host.includes("xhslink.com")) {
-    const m = path.match(/\/([A-Za-z0-9]+)/);
-    if (m) return m[1];
+    const segments = path.split("/").filter(Boolean);
+    const last = segments[segments.length - 1];
+    if (last && /^[A-Za-z0-9]+$/.test(last) && last.length > 1) return last;
   }
 
   throw new Error(`无法从 URL 中解析小红书笔记 ID: ${url}`);
@@ -65,21 +68,25 @@ async function resolveShortUrl(url: string): Promise<string> {
 
   if (!u.hostname.includes("xhslink.com")) return url;
 
-  let current = url;
-  for (let i = 0; i < 5; i++) {
-    const resp = await fetch(current, {
-      headers: { "User-Agent": DESKTOP_UA },
-      redirect: "manual",
-    });
-    const location = resp.headers.get("location");
-    if (!location) break;
-    current = location.startsWith("http")
-      ? location
-      : new URL(location, current).href;
-    if (current.includes("xiaohongshu.com")) return current;
-  }
-
-  return current;
+  return withRetry(
+    async () => {
+      let current = url;
+      for (let i = 0; i < 5; i++) {
+        const resp = await fetch(current, {
+          headers: { "User-Agent": DESKTOP_UA },
+          redirect: "manual",
+        });
+        const location = resp.headers.get("location");
+        if (!location) break;
+        current = location.startsWith("http")
+          ? location
+          : new URL(location, current).href;
+        if (current.includes("xiaohongshu.com")) return current;
+      }
+      return current;
+    },
+    { shouldRetry: isRetryableError },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -273,53 +280,122 @@ async function extractFromDOM(page: Page): Promise<RawNoteData> {
 // Content fetch (Playwright)
 // ---------------------------------------------------------------------------
 
+function parseCookieString(
+  cookieStr: string,
+  domain: string,
+): Array<{ name: string; value: string; domain: string; path: string }> {
+  return cookieStr
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx === -1) return null;
+      return {
+        name: pair.slice(0, eqIdx).trim(),
+        value: pair.slice(eqIdx + 1).trim(),
+        domain,
+        path: "/",
+      };
+    })
+    .filter(Boolean) as Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+  }>;
+}
+
+function isSecurityBlocked(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname;
+    return pathname.includes("/404") || pathname.includes("/login") || pathname.includes("/captcha");
+  } catch {
+    return false;
+  }
+}
+
+const NOTE_URL_RE = /\/(?:explore|discovery\/item)\/([a-f0-9]+)/;
+
+function isNotePage(url: string): boolean {
+  return NOTE_URL_RE.test(url);
+}
+
 async function fetchXiaohongshuData(
   noteId: string,
-  _originalUrl: string,
+  originalUrl: string,
+  configCookie?: string,
 ): Promise<RawNoteData> {
   const noteUrl = `https://www.xiaohongshu.com/explore/${noteId}`;
 
-  // Headed mode is required — Xiaohongshu detects headless browsers and blocks
-  // content loading entirely. On macOS/Linux-with-display this opens a brief
-  // Chromium window that closes automatically after extraction.
-  const browser = await chromium.launch({
-    headless: false,
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-    ],
-  });
+  const browser = await withRetry(
+    () =>
+      chromium.launch({
+        headless: false,
+        args: [
+          "--disable-blink-features=AutomationControlled",
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+        ],
+      }),
+    { maxAttempts: 2, baseDelayMs: 2000 },
+  );
 
   try {
     const context = await createStealthContext(browser);
+
+    if (configCookie) {
+      const parsed = parseCookieString(configCookie, ".xiaohongshu.com");
+      if (parsed.length) await context.addCookies(parsed);
+    }
+
     const page = await context.newPage();
     page.setDefaultTimeout(NAVIGATION_TIMEOUT);
 
-    // Visit homepage first to acquire session cookies (a1, web_session, etc.)
-    // Without these cookies the note page returns a login wall.
     await page.goto("https://www.xiaohongshu.com/explore", {
       waitUntil: "domcontentloaded",
     });
     await page.waitForTimeout(2000);
+    await page.mouse.move(300 + Math.random() * 200, 300 + Math.random() * 200);
+    await page.waitForTimeout(800 + Math.random() * 400);
+    await page.mouse.move(500 + Math.random() * 200, 250 + Math.random() * 150);
+    await page.waitForTimeout(1000 + Math.random() * 500);
 
-    // Navigate to the actual note
-    await page.goto(noteUrl, { waitUntil: "domcontentloaded" });
+    // Navigate to the original URL (including short links) so the browser
+    // handles the full redirect chain with cookies intact.
+    await page.goto(originalUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
 
-    // Wait for the note content container to appear
+    let currentUrl = page.url();
+
+    // If we didn't land on the note page, try the constructed note URL
+    if (isSecurityBlocked(currentUrl) || !isNotePage(currentUrl)) {
+      await page.waitForTimeout(1000 + Math.random() * 1000);
+      await page.goto(noteUrl, { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(3000);
+      currentUrl = page.url();
+    }
+
+    // Verify we actually reached a note page — refuse to extract from
+    // the homepage or any other unrelated page to avoid garbage data.
+    const notePageMatch = currentUrl.match(NOTE_URL_RE);
+    if (!notePageMatch) {
+      throw new Error(
+        "被安全验证拦截，无法访问笔记页面。请更新 config.json 中的 cookies.xiaohongshu",
+      );
+    }
+    const actualNoteId = notePageMatch[1];
+
     await page
       .waitForSelector("#noteContainer, .note-container, .note-detail", {
         timeout: CONTENT_WAIT_TIMEOUT,
       })
       .catch(() => {});
 
-    // Settle time for SPA hydration
     await page.waitForTimeout(2000);
 
-    // Primary: extract from Vue SSR state
-    let data = await extractFromInitialState(page, noteId);
+    let data = await extractFromInitialState(page, actualNoteId);
 
-    // Fallback: DOM extraction
     if (!data || (!data.title && !data.desc)) {
       data = await extractFromDOM(page);
     }
@@ -438,6 +514,34 @@ export function parseXiaohongshuContent(
 }
 
 // ---------------------------------------------------------------------------
+// Error categorization
+// ---------------------------------------------------------------------------
+
+function categorizeError(e: unknown): { code: ErrorCode; details: string } {
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+
+  if (lower.includes("无法从 url") || lower.includes("无效"))
+    return { code: "NOT_FOUND", details: "请检查链接是否正确" };
+  if (lower.includes("登录") || lower.includes("login") || lower.includes("403") || lower.includes("安全验证"))
+    return { code: "AUTH", details: "该内容可能需要登录或 cookies 已过期，请在 config.json 中更新 cookies.xiaohongshu" };
+  if (lower.includes("反爬") || lower.includes("拦截"))
+    return { code: "RATE_LIMIT", details: "被反爬机制拦截，建议稍后重试或配置 cookies" };
+  if (lower.includes("无法提取") || lower.includes("页面结构"))
+    return { code: "PARSE", details: "内容解析失败，页面结构可能已变更" };
+  if (
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("timeout") ||
+    lower.includes("econnr") ||
+    lower.includes("browser")
+  )
+    return { code: "NETWORK", details: "网络请求或浏览器启动失败，建议检查网络后重试" };
+
+  return { code: "UNKNOWN", details: "建议稍后重试" };
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -451,15 +555,29 @@ async function main(): Promise<void> {
   }
 
   try {
+    const configPath = parseConfigArg(process.argv);
+    let configCookie: string | undefined;
+    if (configPath) {
+      try {
+        const cfg = loadConfig(configPath);
+        if (cfg.cookies?.xiaohongshu) configCookie = cfg.cookies.xiaohongshu;
+      } catch {
+        // Config read failure is non-fatal; proceed without cookies
+      }
+    }
+
     const resolved = await resolveShortUrl(url);
     const noteId = extractNoteId(resolved);
-    const data = await fetchXiaohongshuData(noteId, url);
+    const data = await fetchXiaohongshuData(noteId, url, configCookie);
     const content = parseXiaohongshuContent(data, url);
     console.log(JSON.stringify(content, null, 2));
   } catch (e) {
+    const { code, details } = categorizeError(e);
     const err: HandlerError = {
       error: e instanceof Error ? e.message : String(e),
+      code,
       url,
+      details,
     };
     console.log(JSON.stringify(err, null, 2));
     process.exit(1);

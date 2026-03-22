@@ -2,7 +2,7 @@
 
 > 最后更新：2026-03-22
 
-## 当前阶段：Step 3 — 加入小红书 ✅
+## 当前阶段：Step 4 — 打磨体验 ✅
 
 ## 阶段总览
 
@@ -11,7 +11,7 @@
 | Step 1 | 搭骨架 — 目录结构、类型定义、SKILL.md、文档 | ✅ 已完成 |
 | Step 2 | 跑通微博 — 实现 weibo.ts 完整抓取逻辑 | ✅ 已完成 |
 | Step 3 | 加入小红书 — 实现 xiaohongshu.ts (Playwright) | ✅ 已完成 |
-| Step 4 | 打磨体验 — AI 深度总结、图片下载至 Vault、错误处理优化 | ⬜ 待开始 |
+| Step 4 | 打磨体验 — AI 深度总结、图片下载至 Vault、错误处理优化 | ✅ 已完成 |
 
 ---
 
@@ -78,17 +78,25 @@
 
 ---
 
-## Step 4：打磨体验（待开始）
+## Step 4：打磨体验 ✅
 
 **目标：** 提升使用体验和内容质量。
 
 | 任务 | 状态 |
 |------|------|
-| AI 深度总结质量优化（在 SKILL.md 中改进提示词） | ⬜ |
-| 图片下载到 Obsidian Vault 的 LinkMind/attachments/ | ⬜ |
-| Cookie 配置支持 | ⬜ |
-| 错误处理和重试策略增强 | ⬜ |
-| README.md 编写 | ⬜ |
+| 错误处理和重试策略增强（retry.ts、错误分类） | ✅ |
+| Cookie 配置支持（config.ts、config.json cookies 字段） | ✅ |
+| 图片下载到 Obsidian Vault 的 LinkMind/attachments/（download-images.ts） | ✅ |
+| AI 深度总结质量优化（SKILL.md 结构化提示词） | ✅ |
+| README.md 更新 | ✅ |
+
+**技术要点：**
+
+- `retry.ts`：指数退避 + 抖动 (jitter)，区分可重试错误 (网络/5xx) 和不可重试错误 (4xx)
+- `config.ts`：统一配置读取，支持 `cookies.weibo` / `cookies.xiaohongshu` 字段
+- `download-images.ts`：并行下载 (并发 5)，Content-Type 自动推断扩展名，失败优雅降级到远程 URL
+- `types.ts` 新增 `ErrorCode` 枚举，`HandlerError` 增加 `code` 和 `details` 字段
+- SKILL.md 深度总结按内容类型分策略，包含叙述段落 + 关键要点格式
 
 ---
 
