@@ -1,6 +1,6 @@
 # LinkMind
 
-AI Agent Skill that captures social media content into local Markdown notes. Give it a link, get back a structured summary with title, author, date, and original content — all saved to your local directory.
+AI Agent Skill that captures social media content into your Obsidian vault as structured Markdown notes. Give it a link, get back a note with title, author, date, original content, and an AI-powered deep summary — all saved directly to your Obsidian knowledge base.
 
 ## How It Works
 
@@ -12,10 +12,11 @@ Tell your AI agent:
 
 LinkMind will:
 
-1. Identify the platform from the URL
-2. Run a TypeScript handler to extract content (text, images, metadata)
-3. Generate a Markdown file with YAML frontmatter
-4. Save it to `captures/` with an AI-written summary
+1. Read your Obsidian vault path from `skills/linkmind/config.json`
+2. Identify the platform from the URL
+3. Run a TypeScript handler to extract content (text, images, metadata)
+4. Generate a Markdown file with YAML frontmatter and an AI deep summary
+5. Save it to `{your-vault}/LinkMind/` — ready to browse in Obsidian
 
 ## Supported Platforms
 
@@ -30,27 +31,50 @@ LinkMind will:
 LinkMind/
 ├── skills/linkmind/
 │   ├── SKILL.md              # AI workflow instructions
+│   ├── config.json           # User config (Obsidian vault path)
 │   ├── handlers/
 │   │   ├── types.ts          # Shared type definitions
 │   │   ├── weibo.ts          # Weibo content extractor
 │   │   └── xiaohongshu.ts    # Xiaohongshu content extractor
 │   └── templates/
 │       └── note.md           # Markdown output template
-├── captures/                 # Generated notes land here
 └── docs/
     ├── PRD.md                # Product requirements
     ├── ARCH.md               # Architecture & data flow diagrams
     └── PROJECT_STATE.md      # Development progress tracker
 ```
 
+Notes are saved to your Obsidian vault:
+
+```
+{your-vault}/
+└── LinkMind/                 # Auto-created by the skill
+    ├── 2026-03-22-xxx.md
+    └── attachments/          # Image downloads (P1)
+```
+
 ## Setup
 
 Requires **Node.js >= 22**.
+
+**1. Install dependencies:**
 
 ```bash
 cd skills/linkmind/handlers
 npm install
 ```
+
+**2. Configure your Obsidian vault path:**
+
+Create (or edit) `skills/linkmind/config.json`:
+
+```json
+{
+  "obsidian_vault": "/Users/yourname/MyVault"
+}
+```
+
+Replace the path with the absolute path to your Obsidian vault directory.
 
 ## Usage
 
@@ -61,7 +85,7 @@ This skill works with any agent that supports the [SKILL.md standard](https://op
 The AI reads `skills/linkmind/SKILL.md` and knows how to:
 - Recognize trigger phrases like "让我记录", "帮我保存", "capture this"
 - Dispatch to the correct platform handler
-- Generate a Markdown summary and save it
+- Generate a Markdown note with deep summary and save it to your Obsidian vault
 
 ### Standalone handler testing
 
@@ -95,9 +119,9 @@ captured_at: 2026-03-22T14:30:00.000Z
 
 > 来源：微博 @美食达人 | 2026-03-22
 
-## 总结
+## 深度总结
 
-（AI 生成的 2-4 句中文摘要）
+（AI 生成的深度总结：核心观点、关键信息、背景脉络、价值点）
 
 ## 原文内容
 
@@ -115,7 +139,7 @@ captured_at: 2026-03-22T14:30:00.000Z
 | Step 1 | Project scaffold, types, SKILL.md, docs | Done |
 | Step 2 | Weibo handler — full extraction via mobile API | Next |
 | Step 3 | Xiaohongshu handler — Playwright-based extraction | Planned |
-| Step 4 | Polish — image download, AI summary tuning, error handling | Planned |
+| Step 4 | Polish — image download to vault, AI deep summary tuning, error handling | Planned |
 
 See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 

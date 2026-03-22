@@ -3,20 +3,22 @@
 ## 1. 系统概览
 
 LinkMind 是一个 AI Agent Skill，采用 **SKILL.md + Handler 脚本** 的混合架构。
-AI 负责意图识别、内容总结和文件生成，Handler 脚本负责平台抓取和数据结构化。
+AI 负责意图识别、深度总结和文件生成，Handler 脚本负责平台抓取和数据结构化。
+笔记输出到用户配置的 Obsidian Vault，与用户已有的知识库无缝融合。
 
 ```mermaid
 flowchart LR
     User["用户输入链接"] --> Agent["AI Agent"]
-    Agent --> Skill["SKILL.md<br/>工作流指令"]
+    Agent --> Config["读取 config.json<br/>获取 Vault 路径"]
+    Config --> Skill["SKILL.md<br/>工作流指令"]
     Skill --> Dispatch{"识别平台"}
     Dispatch -->|weibo.com| WeiboHandler["weibo.ts"]
     Dispatch -->|xiaohongshu.com| XhsHandler["xiaohongshu.ts"]
     WeiboHandler --> JSON["结构化 JSON"]
     XhsHandler --> JSON
     JSON --> Agent
-    Agent --> Markdown["生成 Markdown"]
-    Markdown --> File["写入 captures/"]
+    Agent --> Markdown["生成 Markdown<br/>含深度总结"]
+    Markdown --> File["写入 Obsidian Vault<br/>LinkMind/"]
     File --> Report["向用户报告结果"]
 ```
 
@@ -27,10 +29,11 @@ flowchart LR
 | 职责 | 说明 |
 |------|------|
 | 意图触发 | 识别"让我记录"等触发词 |
+| 配置读取 | 读取 `config.json`，获取用户 Obsidian Vault 路径 |
 | 平台分发 | 根据 URL 模式判断调用哪个 handler |
-| 内容总结 | 基于 handler 输出的 JSON 生成中文摘要 |
+| 深度总结 | 基于 handler 输出的 JSON 生成深度总结（核心观点、关键信息、背景脉络、价值点） |
 | Markdown 生成 | 按模板格式组装 frontmatter + 正文 |
-| 文件写入 | 命名和保存到 captures/ 目录 |
+| 文件写入 | 命名和保存到 Obsidian Vault 的 `LinkMind/` 子目录 |
 | 错误处理 | 向用户报告失败原因和建议 |
 
 ### 2.2 Handler 脚本 — 平台抓取
@@ -96,7 +99,9 @@ classDiagram
 | TS 运行器 | tsx | 零配置、快速、无需编译步骤 |
 | 微博抓取 | m.weibo.cn 移动端 API | 无需登录、返回 JSON、轻量 |
 | 小红书抓取 | Playwright | 反爬严格需要浏览器渲染 |
-| 输出格式 | Markdown + YAML frontmatter | 通用、可搜索、Git 友好 |
+| 输出格式 | Markdown + YAML frontmatter | 通用、可搜索、Obsidian 原生兼容 |
+| 输出目标 | 用户 Obsidian Vault | 与已有知识库融合、支持双向链接和图谱 |
+| 用户配置 | config.json | 轻量、无需额外依赖、AI 可直接读取 |
 
 ## 4. 数据流
 
@@ -104,20 +109,23 @@ classDiagram
 sequenceDiagram
     participant U as 用户
     participant A as AI Agent
+    participant C as config.json
     participant S as SKILL.md
     participant H as Handler 脚本
     participant P as 平台 API
 
     U->>A: "让我记录 https://weibo.com/xxx"
     A->>S: 匹配触发词，加载 Skill 指令
+    A->>C: 读取 Obsidian Vault 路径
+    C-->>A: obsidian_vault: "/Users/xxx/MyVault"
     S->>A: 识别为微博平台
     A->>H: npx tsx weibo.ts "URL"
     H->>P: GET m.weibo.cn/statuses/show?id=xxx
     P-->>H: JSON response
     H-->>A: CapturedContent JSON (stdout)
-    A->>A: 生成中文摘要
-    A->>A: 组装 Markdown (frontmatter + 正文 + 摘要)
-    A-->>U: 保存到 captures/2026-03-22-xxx.md ✓
+    A->>A: 生成深度总结
+    A->>A: 组装 Markdown (frontmatter + 深度总结 + 正文)
+    A-->>U: 保存到 {Vault}/LinkMind/2026-03-22-xxx.md ✓
 ```
 
 ## 5. 目录结构
@@ -126,6 +134,7 @@ sequenceDiagram
 LinkMind/
 ├── skills/linkmind/
 │   ├── SKILL.md              # AI 读取的工作流指令
+│   ├── config.json           # 用户配置（Obsidian Vault 路径等）
 │   ├── handlers/
 │   │   ├── package.json      # handler 依赖
 │   │   ├── tsconfig.json     # TypeScript 配置
@@ -134,10 +143,15 @@ LinkMind/
 │   │   └── xiaohongshu.ts    # 小红书 handler
 │   └── templates/
 │       └── note.md           # Markdown 模板参考
-├── captures/                 # 输出目录
 ├── docs/                     # 项目文档
 ├── package.json              # 根项目配置
 └── .gitignore
+
+用户 Obsidian Vault（输出目标）：
+{obsidian_vault}/
+└── LinkMind/                 # 由 Skill 自动创建
+    ├── 2026-03-22-xxx.md     # 抓取的笔记
+    └── attachments/          # 图片附件（P1）
 ```
 
 ## 6. 扩展点
@@ -160,4 +174,5 @@ LinkMind/
 ### 图片本地化（P1）
 
 在 handler 中增加图片下载逻辑，或在 SKILL.md 中指导 AI 使用 curl 下载。
-图片保存到 `captures/images/{date}-{slug}/` 子目录。
+图片保存到 Obsidian Vault 的 `LinkMind/attachments/{date}-{slug}/` 子目录，
+Markdown 中使用相对路径引用，确保 Obsidian 内可正常显示。

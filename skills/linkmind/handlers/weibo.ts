@@ -4,6 +4,7 @@
  * Output: JSON to stdout
  */
 
+import { fileURLToPath } from "node:url";
 import type { WeiboContent, HandlerError } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -13,7 +14,7 @@ import type { WeiboContent, HandlerError } from "./types.js";
 const BASE62_ALPHABET =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-function base62ToMid(base62: string): string {
+export function base62ToMid(base62: string): string {
   const groups: string[] = [];
   for (let i = base62.length; i > 0; i -= 4) {
     const start = Math.max(0, i - 4);
@@ -27,7 +28,7 @@ function base62ToMid(base62: string): string {
   return groups.join("");
 }
 
-function extractWeiboId(url: string): string {
+export function extractWeiboId(url: string): string {
   let u: URL;
   try {
     u = new URL(url);
@@ -61,13 +62,17 @@ function extractWeiboId(url: string): string {
 // HTML cleanup
 // ---------------------------------------------------------------------------
 
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<span class="url-icon">.*?<\/span>/gi, "")
     .replace(/<a[^>]*>#([^<]+)#<\/a>/gi, "#$1#")
     .replace(/<a[^>]*>@([^<]+)<\/a>/gi, "@$1")
     .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, "$1")
     .replace(/<[^>]+>/g, "")
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16)),
+    )
     .replace(/&nbsp;/g, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -86,51 +91,185 @@ function parseWeiboDate(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// API fetch
+// Short link resolution
 // ---------------------------------------------------------------------------
 
 const MOBILE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
 
-async function fetchWeiboData(mid: string): Promise<Record<string, any>> {
-  // TODO [Step 2]: implement full API call
-  // const resp = await fetch(`https://m.weibo.cn/statuses/show?id=${mid}`, {
-  //   headers: {
-  //     "User-Agent": MOBILE_UA,
-  //     Referer: "https://m.weibo.cn",
-  //     Accept: "application/json",
-  //   },
-  // });
-  // if (!resp.ok) throw new Error(`API 请求失败: HTTP ${resp.status}`);
-  // const json = await resp.json();
-  // if (json.ok !== 1) throw new Error(`微博返回错误: ${json.msg ?? "未知"}`);
-  // return json.data;
+async function resolveShortUrl(url: string): Promise<string> {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  if (u.hostname === "t.cn") {
+    const resp = await fetch(url, {
+      headers: { "User-Agent": MOBILE_UA },
+      redirect: "manual",
+    });
+    const location = resp.headers.get("location");
+    if (location) return location;
+  }
+  return url;
+}
 
-  throw new Error(
-    `[未实现] 微博抓取功能将在 Step 2 中实现。mid=${mid}`
+// ---------------------------------------------------------------------------
+// Visitor cookie acquisition
+// ---------------------------------------------------------------------------
+
+async function acquireVisitorCookies(): Promise<string> {
+  // Step 1: generate visitor tid
+  const genResp = await fetch(
+    "https://passport.weibo.com/visitor/genvisitor",
+    {
+      method: "POST",
+      headers: {
+        "User-Agent": MOBILE_UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "cb=gen_callback&fp=%7B%7D",
+    },
   );
+  const genText = await genResp.text();
+  const tidMatch = genText.match(/"tid":"([^"]+)"/);
+  if (!tidMatch) throw new Error("无法获取微博访客 tid");
+  const tid = tidMatch[1];
+
+  // Step 2: exchange tid for SUB/SUBP cookies
+  const incarnateResp = await fetch(
+    `https://passport.weibo.com/visitor/visitor?a=incarnate&t=${encodeURIComponent(tid)}&w=3&c=100&gc=&cb=cross_domain&from=weibo&_rand=${Math.random()}`,
+    { headers: { "User-Agent": MOBILE_UA } },
+  );
+  const incarnateText = await incarnateResp.text();
+  const subMatch = incarnateText.match(/"sub":"([^"]+)"/);
+  const subpMatch = incarnateText.match(/"subp":"([^"]+)"/);
+  if (!subMatch || !subpMatch) {
+    throw new Error("无法获取微博访客 cookie");
+  }
+
+  return `SUB=${subMatch[1]}; SUBP=${subpMatch[1]}`;
+}
+
+// ---------------------------------------------------------------------------
+// API fetch
+// ---------------------------------------------------------------------------
+
+async function fetchWeiboData(mid: string): Promise<Record<string, any>> {
+  const cookie = await acquireVisitorCookies();
+
+  const apiHeaders: Record<string, string> = {
+    "User-Agent": MOBILE_UA,
+    Referer: `https://m.weibo.cn/detail/${mid}`,
+    Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+    Cookie: cookie,
+  };
+
+  const resp = await fetch(
+    `https://m.weibo.cn/statuses/show?id=${mid}`,
+    { headers: apiHeaders },
+  );
+
+  if (!resp.ok) {
+    throw new Error(`API 请求失败: HTTP ${resp.status}`);
+  }
+
+  const json = await resp.json();
+  if (json.ok !== 1) {
+    throw new Error(`微博返回错误: ${json.msg ?? "未知"}`);
+  }
+
+  const data = json.data;
+
+  // Fetch full text for long posts
+  if (data.isLongText) {
+    try {
+      const extResp = await fetch(
+        `https://m.weibo.cn/statuses/extend?id=${mid}`,
+        { headers: apiHeaders },
+      );
+      if (extResp.ok) {
+        const extJson = await extResp.json();
+        if (extJson.ok === 1 && extJson.data?.longTextContent) {
+          data.text = extJson.data.longTextContent;
+        }
+      }
+    } catch {
+      // Fall back to truncated text
+    }
+  }
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extractVideoUrl(
+  pageInfo: Record<string, any> | undefined,
+): string | null {
+  if (!pageInfo || pageInfo.type !== "video") return null;
+  const urls = pageInfo.urls ?? {};
+  return (
+    urls.mp4_720p_mp4 ??
+    urls.mp4_hd_mp4 ??
+    urls.mp4_ld_mp4 ??
+    pageInfo.media_info?.stream_url_hd ??
+    pageInfo.media_info?.stream_url ??
+    null
+  );
+}
+
+function extractImages(pics: any[] | undefined): string[] {
+  if (!Array.isArray(pics)) return [];
+  return pics.map((pic) => pic.large?.url ?? pic.url).filter(Boolean);
+}
+
+function makeTitle(text: string): string {
+  const firstLine = text.split("\n")[0];
+  if (firstLine.length <= 30) return firstLine;
+  return firstLine.slice(0, 30) + "…";
 }
 
 // ---------------------------------------------------------------------------
 // Content assembly
 // ---------------------------------------------------------------------------
 
-function parseWeiboContent(
-  _data: Record<string, any>,
+export function parseWeiboContent(
+  data: Record<string, any>,
   originalUrl: string,
 ): WeiboContent {
-  // TODO [Step 2]: parse API response into WeiboContent
+  const user = data.user ?? {};
+  const cleanText = stripHtml(data.text ?? "");
+
+  let repostOf: WeiboContent["repostOf"] = null;
+  if (data.retweeted_status) {
+    const rt = data.retweeted_status;
+    repostOf = {
+      author: rt.user?.screen_name ?? "未知",
+      text: stripHtml(rt.text ?? ""),
+    };
+  }
+
   return {
     platform: "weibo",
-    title: "",
-    author: "",
-    date: "",
-    text: "",
-    images: [],
-    videoUrl: null,
-    repostOf: null,
-    stats: { reposts: 0, comments: 0, likes: 0 },
+    title: makeTitle(cleanText),
+    author: user.screen_name ?? "未知",
+    authorAvatar: user.profile_image_url ?? undefined,
+    date: parseWeiboDate(data.created_at ?? ""),
+    text: cleanText,
+    images: extractImages(data.pics),
+    videoUrl: extractVideoUrl(data.page_info),
+    repostOf,
+    stats: {
+      reposts: data.reposts_count ?? 0,
+      comments: data.comments_count ?? 0,
+      likes: data.attitudes_count ?? 0,
+    },
     originalUrl,
     fetchedAt: new Date().toISOString(),
   };
@@ -150,7 +289,8 @@ async function main(): Promise<void> {
   }
 
   try {
-    const mid = extractWeiboId(url);
+    const resolved = await resolveShortUrl(url);
+    const mid = extractWeiboId(resolved);
     const data = await fetchWeiboData(mid);
     const content = parseWeiboContent(data, url);
     console.log(JSON.stringify(content, null, 2));
@@ -164,4 +304,6 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

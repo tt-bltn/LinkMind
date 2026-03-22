@@ -2,7 +2,8 @@
 name: linkmind-capture
 description: >
   Capture social media links (Weibo, Xiaohongshu) — extract text, images,
-  and metadata, then generate a Markdown summary file in the captures/ directory.
+  and metadata, then generate a Markdown note with AI deep summary,
+  saved to the user's Obsidian vault.
 triggers:
   - "让我记录"
   - "帮我保存"
@@ -17,6 +18,23 @@ allowed-tools: Shell, Read, Write, Glob, Grep
 
 When the user provides a social media link and asks you to capture/record/save it,
 follow the workflow below.
+
+## Step 0: Read configuration
+
+Read the config file at `skills/linkmind/config.json` to get the user's Obsidian
+vault path:
+
+```json
+{
+  "obsidian_vault": "/absolute/path/to/vault"
+}
+```
+
+- If the file does not exist or `obsidian_vault` is empty, tell the user:
+  "请先在 `skills/linkmind/config.json` 中配置你的 Obsidian 知识库路径。"
+  and provide the example JSON above.
+- Verify the vault directory exists. If not, inform the user that the path is invalid.
+- The output directory is `{obsidian_vault}/LinkMind/`. Create it if it does not exist.
 
 ## Step 1: Identify the platform
 
@@ -66,9 +84,12 @@ captured_at: {fetchedAt}
 
 > Source: {platform display name} @{author} | {date}
 
-## Summary
+## 深度总结
 
-(Write a concise 2-4 sentence summary of the content in Chinese.)
+(Write a deep summary of the content in Chinese. Cover: core viewpoints,
+key information, background context, and value points. The summary should
+help the reader fully understand the content without reading the original.
+Aim for a thorough analysis, not just a brief 2-4 sentence recap.)
 
 ## Original Content
 
@@ -96,16 +117,16 @@ Name the file as: `{date}-{slug}.md`
 
 ### Output directory
 
-Save the file to `captures/` in the project root. Create the directory if it
-does not exist.
+Save the file to `{obsidian_vault}/LinkMind/` (the vault path from Step 0).
+Create the `LinkMind/` subdirectory if it does not exist.
 
 ## Step 4: Report result
 
 After saving, tell the user:
-- The file path where the note was saved
+- The file path where the note was saved (the full Obsidian vault path)
 - The title extracted from the content
 - The platform and author
-- A brief summary of what was captured
+- A brief overview of the deep summary
 
 ## Error handling
 
