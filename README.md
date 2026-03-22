@@ -47,7 +47,8 @@ LinkMind/
 │   └── templates/
 │       └── note.md            # Markdown output template
 ├── .claude-plugin/
-│   └── marketplace.json       # Claude Code plugin registration
+│   └── plugin.json            # Claude Code plugin manifest
+├── CHANGELOG.md
 └── docs/
     ├── PRD.md                 # Product requirements
     ├── ARCH.md                # Architecture & data flow diagrams
@@ -79,11 +80,45 @@ Notes are saved to your Obsidian vault:
 
 ## Installation
 
+**Option A — ClawHub Registry:**
+
+```bash
+npx clawhub@latest install linkmind-capture
+```
+
+**Option B — OpenClaw manual install:**
+
+```bash
+git clone https://github.com/tt-bltn/LinkMind.git /tmp/LinkMind
+cp -r /tmp/LinkMind/skills/linkmind ~/.openclaw/skills/linkmind
+cd ~/.openclaw/skills/linkmind/scripts && npm install
+```
+
+Or symlink into your workspace:
+
+```bash
+git clone https://github.com/tt-bltn/LinkMind.git ~/LinkMind
+ln -s ~/LinkMind/skills/linkmind <your-workspace>/skills/linkmind
+cd ~/LinkMind/skills/linkmind/scripts && npm install
+```
+
+**Option C — Claude Code Plugin:**
+
+```
+/plugin install https://github.com/tt-bltn/LinkMind
+```
+
+This installs the plugin directly from GitHub. After installation, follow the post-install prompt to configure your Obsidian vault path.
+
+**Option D — Cursor / other AI agents:**
+
 ```bash
 git clone https://github.com/tt-bltn/LinkMind.git
 cd LinkMind/skills/linkmind/scripts
 npm install
 ```
+
+The AI agent reads `skills/linkmind/SKILL.md` for workflow instructions.
 
 ## Setup
 
@@ -244,4 +279,4 @@ See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 
 ## License
 
-Personal use.
+MIT

@@ -5,7 +5,7 @@
   "description": "AI skill for capturing social media content into Markdown notes",
   "type": "module",
   "scripts": {
-    "clawhub:publish": "clawhub publish ./skills/linkmind --slug linkmind-capture --name 'LinkMind Capture' --tags latest",
+    "clawhub:publish": "clawhub publish ./skills/linkmind --slug linkmind-capture --name 'LinkMind Capture' --version 0.1.0 --tags latest",
     "clawhub:sync": "clawhub sync --root ./skills"
   }
 }

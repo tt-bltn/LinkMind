@@ -126,10 +126,10 @@
 | 任务 | 状态 |
 |------|------|
 | SKILL.md frontmatter 添加 `metadata.openclaw` 字段 | ✅ |
-| 添加 `.claude-plugin/marketplace.json` 支持 Claude Code Plugin 安装 | ✅ |
-| 支持 `openclaw skills add <repo-url>`（OpenClaw CLI 安装） | ✅ |
+| 添加 `.claude-plugin/plugin.json` 标准插件清单 | ✅ |
+| 支持 `/plugin install` GitHub URL 直接安装（Claude Code） | ✅ |
+| 支持 OpenClaw 手动安装（clone → 复制到 `~/.openclaw/skills/`） | ✅ |
 | 支持 `clawhub install linkmind-capture`（ClawHub Registry 单独安装） | ✅ |
-| 支持 `/plugin marketplace add tt-bltn/LinkMind`（Claude Code 安装） | ✅ |
 | 添加 ClawHub 发布脚本（`npm run clawhub:publish`） | ✅ |
 
 ### 7.2 Skill 目录自包含化
