@@ -1,5 +1,7 @@
 # LinkMind
 
+English | [中文](README_CN.md)
+
 AI Agent Skill that captures social media content into your Obsidian vault as structured Markdown notes. Give it a link, get back a note with title, author, date, original content, and an AI-powered deep summary — all saved directly to your Obsidian knowledge base.
 
 ## How It Works
