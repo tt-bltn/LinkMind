@@ -2,7 +2,7 @@
 
 > 最后更新：2026-03-22
 
-## 当前阶段：Step 2 — 跑通微博 ✅
+## 当前阶段：Step 3 — 加入小红书 ✅
 
 ## 阶段总览
 
@@ -10,7 +10,7 @@
 |------|------|------|
 | Step 1 | 搭骨架 — 目录结构、类型定义、SKILL.md、文档 | ✅ 已完成 |
 | Step 2 | 跑通微博 — 实现 weibo.ts 完整抓取逻辑 | ✅ 已完成 |
-| Step 3 | 加入小红书 — 实现 xiaohongshu.ts (Playwright) | ⬜ 待开始 |
+| Step 3 | 加入小红书 — 实现 xiaohongshu.ts (Playwright) | ✅ 已完成 |
 | Step 4 | 打磨体验 — AI 深度总结、图片下载至 Vault、错误处理优化 | ⬜ 待开始 |
 
 ---
@@ -53,19 +53,28 @@
 
 ---
 
-## Step 3：加入小红书（待开始）
+## Step 3：加入小红书 ✅
 
 **目标：** 集成 Playwright，实现 xiaohongshu.ts 完整抓取。
 
 | 任务 | 状态 |
 |------|------|
-| 添加 playwright 依赖 | ⬜ |
-| 实现浏览器启动和页面导航 | ⬜ |
-| 实现内容提取（标题、正文、图片、标签） | ⬜ |
-| 处理 xhslink.com 短链接 | ⬜ |
-| 处理视频笔记 | ⬜ |
-| Stealth 模式 / 反爬对策 | ⬜ |
-| 端到端测试：真实小红书链接 → Obsidian Vault 中的 Markdown 文件 | ⬜ |
+| 添加 playwright 依赖 | ✅ |
+| 实现浏览器启动和页面导航 | ✅ |
+| 实现内容提取（标题、正文、图片、标签） | ✅ |
+| 处理 xhslink.com 短链接 | ✅ |
+| 处理视频笔记 | ✅ |
+| Stealth 模式 / 反爬对策 | ✅ |
+| 端到端测试：真实小红书链接 → JSON 输出（42 tests passed） | ✅ |
+
+**技术要点：**
+
+- 小红书反爬严格，headless 模式会被拦截。使用 headed 模式 (`headless: false`) 绕过检测
+- 先访问首页获取会话 cookie（`a1`, `web_session` 等），再导航到笔记页面
+- 数据提取优先从 `window.__INITIAL_STATE__`（Vue SSR 状态）中获取结构化 JSON
+- DOM 选择器作为兜底方案
+- 使用 string-based `page.evaluate` 避免 tsx/esbuild `__name` 装饰器泄漏到浏览器上下文
+- Vue 响应式对象的循环引用通过 `WeakSet` + `safeClone` 处理
 
 ---
 
