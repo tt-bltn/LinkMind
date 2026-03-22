@@ -2,16 +2,16 @@
 
 > 最后更新：2026-03-22
 
-## 当前阶段：Step 1 — 搭骨架 ✅
+## 当前阶段：Step 2 — 跑通微博 ✅
 
 ## 阶段总览
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | Step 1 | 搭骨架 — 目录结构、类型定义、SKILL.md、文档 | ✅ 已完成 |
-| Step 2 | 跑通微博 — 实现 weibo.ts 完整抓取逻辑 | ⬜ 待开始 |
+| Step 2 | 跑通微博 — 实现 weibo.ts 完整抓取逻辑 | ✅ 已完成 |
 | Step 3 | 加入小红书 — 实现 xiaohongshu.ts (Playwright) | ⬜ 待开始 |
-| Step 4 | 打磨体验 — AI 总结、图片下载、错误处理优化 | ⬜ 待开始 |
+| Step 4 | 打磨体验 — AI 深度总结、图片下载至 Vault、错误处理优化 | ⬜ 待开始 |
 
 ---
 
@@ -27,7 +27,7 @@
 | 创建 xiaohongshu.ts 骨架（入口 + URL 解析 + TODO） | ✅ |
 | 编写 SKILL.md（完整 AI 工作流指令） | ✅ |
 | 创建 Markdown 模板 templates/note.md | ✅ |
-| 创建 captures/ 输出目录 | ✅ |
+| 创建 config.json 配置文件（Obsidian Vault 路径） | ✅ |
 | 编写 PRD.md 需求文档 | ✅ |
 | 编写 ARCH.md 架构文档 | ✅ |
 | 编写 PROJECT_STATE.md 项目状态文档 | ✅ |
@@ -36,19 +36,20 @@
 
 ---
 
-## Step 2：跑通微博（待开始）
+## Step 2：跑通微博 ✅
 
 **目标：** 完整实现 weibo.ts，能抓取真实微博链接并生成 Markdown 文件。
 
 | 任务 | 状态 |
 |------|------|
-| 实现 fetchWeiboData — 调用 m.weibo.cn API | ⬜ |
-| 实现 parseWeiboContent — 解析 JSON 响应 | ⬜ |
-| 实现 HTML 清洗（stripHtml） | ⬜ |
-| 处理转发微博（retweeted_status） | ⬜ |
-| 处理视频微博（page_info.urls） | ⬜ |
-| 处理短链接重定向（t.cn） | ⬜ |
-| 端到端测试：真实微博链接 → Markdown 文件 | ⬜ |
+| 实现 fetchWeiboData — 调用 m.weibo.cn API | ✅ |
+| 实现 parseWeiboContent — 解析 JSON 响应 | ✅ |
+| 实现 HTML 清洗（stripHtml） | ✅ |
+| 处理转发微博（retweeted_status） | ✅ |
+| 处理视频微博（page_info.urls） | ✅ |
+| 处理短链接重定向（t.cn） | ✅ |
+| 实现微博访客 cookie 自动获取 | ✅ |
+| 端到端测试：真实微博链接 → JSON 输出（41 tests passed） | ✅ |
 
 ---
 
@@ -64,7 +65,7 @@
 | 处理 xhslink.com 短链接 | ⬜ |
 | 处理视频笔记 | ⬜ |
 | Stealth 模式 / 反爬对策 | ⬜ |
-| 端到端测试：真实小红书链接 → Markdown 文件 | ⬜ |
+| 端到端测试：真实小红书链接 → Obsidian Vault 中的 Markdown 文件 | ⬜ |
 
 ---
 
@@ -74,8 +75,8 @@
 
 | 任务 | 状态 |
 |------|------|
-| AI 总结质量优化（在 SKILL.md 中改进提示词） | ⬜ |
-| 图片下载到本地 captures/images/ | ⬜ |
+| AI 深度总结质量优化（在 SKILL.md 中改进提示词） | ⬜ |
+| 图片下载到 Obsidian Vault 的 LinkMind/attachments/ | ⬜ |
 | Cookie 配置支持 | ⬜ |
 | 错误处理和重试策略增强 | ⬜ |
 | README.md 编写 | ⬜ |
@@ -89,4 +90,5 @@
 - **Node.js：** v25.2.1
 - **微博抓取：** Node.js 内置 fetch + m.weibo.cn API
 - **小红书抓取：** Playwright (Step 3 添加)
+- **输出目标：** 用户 Obsidian Vault（通过 config.json 配置路径）
 - **AI 集成：** SKILL.md (OpenClaw / Cursor / Claude Code 兼容)
