@@ -18,12 +18,5 @@
     "knowledge-base",
     "ai-summary"
   ],
-  "skills": ["skills/linkmind/SKILL.md"],
-  "install": {
-    "steps": [
-      "cd skills/linkmind/scripts && npm install",
-      "cp skills/linkmind/config.template.json skills/linkmind/config.json"
-    ],
-    "post_install_message": "Edit skills/linkmind/config.json to set your Obsidian vault path."
-  }
+  "skills": "./skills/linkmind/"
 }

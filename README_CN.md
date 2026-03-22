@@ -49,7 +49,8 @@ LinkMind/
 │   └── templates/
 │       └── note.md            # Markdown 输出模板
 ├── .claude-plugin/
-│   └── plugin.json            # Claude Code 插件清单
+│   ├── plugin.json            # Claude Code 插件清单
+│   └── marketplace.json       # Claude Code marketplace 目录
 ├── CHANGELOG.md
 └── docs/
     ├── PRD.md                 # 产品需求文档
@@ -88,6 +89,8 @@ LinkMind/
 npx clawhub@latest install linkmind-capture
 ```
 
+> **提示：** ClawHub 安装时可能会显示 VirusTotal Code Insight 安全警告，提示该 skill "可疑"。这是误报，原因是代码中包含了对网页抓取工具来说完全正常的模式 —— 向外部网站（微博、小红书）发送 HTTP 请求、浏览器 Cookie 处理、Chrome DevTools Protocol 自动化（`Runtime.evaluate`）、以及 API 密钥配置（讯飞 / OpenAI）。所有凭据仅在本地使用，不会向第三方发送任何数据。安装前可以在 `skills/linkmind/scripts/` 中查看完整源码。
+
 **方式二 — OpenClaw 手动安装：**
 
 ```bash
@@ -107,10 +110,11 @@ cd ~/LinkMind/skills/linkmind/scripts && npm install
 **方式三 — Claude Code 插件：**
 
 ```
-/plugin install https://github.com/tt-bltn/LinkMind
+/plugin marketplace add tt-bltn/LinkMind
+/plugin install linkmind-capture@linkmind
 ```
 
-从 GitHub 直接安装插件。安装后按提示配置你的 Obsidian 知识库路径。
+先添加 marketplace，再安装插件。安装后配置你的 Obsidian 知识库路径。
 
 **方式四 — Cursor / 其他 AI Agent：**
 
