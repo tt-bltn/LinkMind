@@ -1,0 +1,7 @@
+{
+  "name": "linkmind",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI skill for capturing social media content into Markdown notes",
+  "type": "module"
+}

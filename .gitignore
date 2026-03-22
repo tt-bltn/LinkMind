@@ -1,0 +1,21 @@
+node_modules/
+
+# Captured content (keep directory, ignore files)
+captures/*
+!captures/.gitkeep
+
+# Environment and secrets
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript build output
+dist/
+*.tsbuildinfo
