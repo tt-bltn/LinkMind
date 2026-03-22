@@ -113,6 +113,66 @@
 - 只保留 SRT 字幕文件，视频和音频处理后删除，节省 Vault 空间
 - ffmpeg 通过 npm 包 `ffmpeg-static` 自动安装，无需用户手动配置
 
+### P1 — 分发与安装
+
+| 功能 | 说明 |
+|------|------|
+| 多渠道分发 | 支持 OpenClaw CLI (`npx skills add`)、ClawHub Registry (`clawhub install`)、Claude Code Plugin (`/plugin marketplace add`) 三种安装方式 |
+| Skill 自包含 | `skills/linkmind/` 目录可独立分发，无需依赖仓库外部文件 |
+| Chrome CDP 替代 Playwright | 小红书抓取从 Playwright 迁移到 Chrome CDP，复用用户系统 Chrome，消除 ~200MB Chromium 下载 |
+| 配置模板化 | 仓库中不含真实配置，安装时由用户生成 `config.json`，敏感信息存入 `.env` |
+| 运行时评估 | 评估从 tsx 切换到 Bun（`npx -y bun` 零安装、更快启动） |
+
+#### 多渠道分发 — 详细说明
+
+**目标：** 让其他用户通过命令行一键安装 LinkMind skill 到自己的 AI Agent 环境。
+
+**三条安装渠道：**
+
+| 渠道 | 命令 | 机制 |
+|------|------|------|
+| OpenClaw CLI | `npx skills add tt-bltn/LinkMind` | 从 GitHub 直接拉取仓库内的 skill 目录 |
+| ClawHub Registry | `clawhub install linkmind-capture` | 各 skill 单独发布到 ClawHub 注册表 |
+| Claude Code Plugin | `/plugin marketplace add tt-bltn/LinkMind` | 通过 `.claude-plugin/marketplace.json` 注册为 Claude Code 插件市场 |
+
+**所需改动：**
+
+1. SKILL.md frontmatter 添加 `metadata.openclaw` 字段（含 homepage、requires）
+2. 仓库根目录添加 `.claude-plugin/marketplace.json`
+3. 添加 ClawHub 发布脚本
+
+#### Chrome CDP 替代 Playwright — 详细说明
+
+**动机：** Playwright 依赖独立下载的 Chromium 浏览器（~200MB），是用户安装 LinkMind 的最大障碍。改用 Chrome DevTools Protocol (CDP) 直接连接用户系统已安装的 Chrome，可以：
+
+- 零额外下载：所有用户的电脑上通常已安装 Chrome
+- 天然通过反检测：系统 Chrome 不会被识别为自动化浏览器
+- 复用已有 session：用户已登录的小红书 cookies 可以直接使用
+
+**技术方案：**
+
+| Playwright API | CDP 等价方案 |
+|---------------|-------------|
+| `chromium.launch()` | 查找系统 Chrome 可执行文件，以 `--remote-debugging-port` 启动 |
+| `page.evaluate()` | `Runtime.evaluate` CDP 命令 |
+| `context.addInitScript()` | `Page.addScriptToEvaluateOnNewDocument` CDP 命令 |
+| `page.mouse.move()` | `Input.dispatchMouseEvent` CDP 命令 |
+| `context.addCookies()` | 系统 Chrome 已有用户登录态，或通过 `Network.setCookies` |
+
+**风险点：** 需要先做 POC 验证小红书的反爬系统是否会检测 CDP 的 `--remote-debugging-port` 参数。如果验证不通过，保留 Playwright 作为 fallback（安装时提示用户选择平台支持范围）。
+
+#### Skill 自包含 — 详细说明
+
+**目标：** `skills/linkmind/` 目录被分发后无需任何外部文件即可运行。
+
+**改动清单：**
+
+1. `handlers/` 重命名为 `scripts/`（对齐 OpenClaw 生态约定）
+2. `config.json` 改为 `config.template.json`（仓库中不含真实路径和密钥）
+3. 安装工具根据模板 + 用户输入生成真实的 `config.json`
+4. 敏感配置（cookies、ASR API keys）迁移到 `.env` 文件
+5. SKILL.md 中过长的深度总结指南拆分到 `references/` 目录
+
 ### P2 — 扩展功能
 
 | 功能 | 说明 |
@@ -162,6 +222,19 @@
 - [ ] Markdown 笔记中包含"视频转写"章节，内联 SRT 纯文本并链接到 SRT 文件
 - [ ] AI 深度总结综合考虑原文文本 + 视频转写文本
 - [ ] ASR 失败时（网络错误、鉴权失败等）不阻断整体流程，向用户报告错误并继续生成笔记
+
+### P1 验收标准 — 分发与安装
+
+- [ ] 仓库包含 `.claude-plugin/marketplace.json`，可通过 `/plugin marketplace add tt-bltn/LinkMind` 安装
+- [ ] SKILL.md frontmatter 包含 `metadata.openclaw` 字段
+- [ ] `skills/linkmind/` 目录可独立分发（不依赖仓库根目录文件）
+- [ ] `handlers/` 已重命名为 `scripts/`，SKILL.md 中的路径同步更新
+- [ ] 仓库中不含真实用户配置（`config.json` 改为模板）
+- [ ] 敏感信息（cookies、ASR keys）通过 `.env` 文件管理
+- [ ] Chrome CDP 方案 POC 验证完成（通过/不通过均需记录结论）
+- [ ] 若 CDP POC 通过：小红书 handler 已迁移到 CDP，Playwright 依赖已移除
+- [ ] 若 CDP POC 不通过：Playwright 保留，安装时明确提示需下载 Chromium（~200MB）
+- [ ] 安装说明（README）涵盖三种安装渠道
 
 ## 6. 技术约束
 

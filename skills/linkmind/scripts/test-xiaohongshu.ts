@@ -250,7 +250,7 @@ function testStatCountParsing(): void {
 // ---------------------------------------------------------------------------
 
 async function testE2E(): Promise<void> {
-  console.log("\n[E2E] Running handler with real Xiaohongshu URL...");
+  console.log("\n[E2E] Running handler with real Xiaohongshu URL (Chrome CDP)...");
 
   const testUrl =
     "https://www.xiaohongshu.com/explore/6458c890000000001300e52b";

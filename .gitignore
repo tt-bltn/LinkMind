@@ -4,6 +4,9 @@ node_modules/
 captures/*
 !captures/.gitkeep
 
+# User config (contains real vault path and secrets); template is tracked
+skills/linkmind/config.json
+
 # Environment and secrets
 .env
 .env.*

@@ -3,14 +3,15 @@
  * Usage: npx tsx xiaohongshu.ts "<xiaohongshu-url>"
  * Output: JSON to stdout
  *
- * Uses Playwright for browser-based content extraction.
+ * Uses Chrome DevTools Protocol (CDP) for browser-based content extraction.
+ * Connects to the user's system Chrome — no Chromium download required.
  */
 
 import { fileURLToPath } from "node:url";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import type { XiaohongshuContent, HandlerError, ErrorCode } from "./types.js";
 import { withRetry, isRetryableError } from "./retry.js";
 import { loadConfig, parseConfigArg } from "./config.js";
+import { launchWithPage, type CDPBrowser, type CDPPage } from "./chrome-cdp.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -90,31 +91,15 @@ async function resolveShortUrl(url: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Browser helpers
+// Stealth script injected before every navigation
 // ---------------------------------------------------------------------------
 
-async function createStealthContext(browser: Browser): Promise<BrowserContext> {
-  const context = await browser.newContext({
-    userAgent: DESKTOP_UA,
-    viewport: { width: 1280, height: 800 },
-    locale: "zh-CN",
-    timezoneId: "Asia/Shanghai",
-    extraHTTPHeaders: {
-      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    },
-  });
-
-  await context.addInitScript({
-    content: `
-      Object.defineProperty(navigator, "webdriver", { get: function() { return undefined; } });
-      Object.defineProperty(navigator, "plugins", { get: function() { return [1, 2, 3, 4, 5]; } });
-      Object.defineProperty(navigator, "languages", { get: function() { return ["zh-CN", "zh", "en"]; } });
-      window.chrome = { runtime: {} };
-    `,
-  });
-
-  return context;
-}
+const STEALTH_SCRIPT = `
+  Object.defineProperty(navigator, "webdriver", { get: function() { return undefined; } });
+  Object.defineProperty(navigator, "plugins", { get: function() { return [1, 2, 3, 4, 5]; } });
+  Object.defineProperty(navigator, "languages", { get: function() { return ["zh-CN", "zh", "en"]; } });
+  window.chrome = { runtime: {} };
+`;
 
 // ---------------------------------------------------------------------------
 // Content extraction — __INITIAL_STATE__
@@ -136,10 +121,8 @@ interface RawNoteData {
   type: string;
 }
 
-async function extractFromInitialState(page: Page, noteId: string): Promise<RawNoteData | null> {
-  // String-based evaluation avoids tsx/esbuild __name decorator leaking into browser.
-  // Uses a WeakSet-based serializer to handle Vue reactive circular references.
-  return page.evaluate(`(() => {
+function buildExtractScript(noteId: string): string {
+  return `(() => {
     var state = window.__INITIAL_STATE__;
     if (!state) return null;
 
@@ -195,89 +178,86 @@ async function extractFromInitialState(page: Page, noteId: string): Promise<RawN
       },
       type: str(note.type),
     }, 0);
-  })()`) as unknown as RawNoteData | null;
+  })()`;
 }
 
 // ---------------------------------------------------------------------------
 // Content extraction — DOM fallback
 // ---------------------------------------------------------------------------
 
-async function extractFromDOM(page: Page): Promise<RawNoteData> {
-  // String-based evaluation avoids tsx/esbuild __name decorator leaking into the browser
-  return page.evaluate(`(() => {
-    function qs(sel) {
-      var el = document.querySelector(sel);
-      return (el && el.textContent) ? el.textContent.trim() : "";
-    }
+const DOM_EXTRACT_SCRIPT = `(() => {
+  function qs(sel) {
+    var el = document.querySelector(sel);
+    return (el && el.textContent) ? el.textContent.trim() : "";
+  }
 
-    var title =
-      qs("#detail-title") ||
-      qs(".note-top .title") ||
-      qs("[class*='title']") ||
-      "";
+  var title =
+    qs("#detail-title") ||
+    qs(".note-top .title") ||
+    qs("[class*='title']") ||
+    "";
 
-    var desc =
-      qs("#detail-desc") ||
-      qs(".note-text") ||
-      qs("[class*='desc']") ||
-      "";
+  var desc =
+    qs("#detail-desc") ||
+    qs(".note-text") ||
+    qs("[class*='desc']") ||
+    "";
 
-    var imgElements = document.querySelectorAll(
-      ".swiper-slide img, .note-image img, [class*='carousel'] img, #noteContainer img"
-    );
-    var imageList = Array.from(imgElements)
-      .map(function(img) {
-        var src = img.src || img.getAttribute("data-src") || "";
-        return { urlDefault: src };
-      })
-      .filter(function(i) { return i.urlDefault && i.urlDefault.indexOf("avatar") === -1; });
+  var imgElements = document.querySelectorAll(
+    ".swiper-slide img, .note-image img, [class*='carousel'] img, #noteContainer img"
+  );
+  var imageList = Array.from(imgElements)
+    .map(function(img) {
+      var src = img.src || img.getAttribute("data-src") || "";
+      return { urlDefault: src };
+    })
+    .filter(function(i) { return i.urlDefault && i.urlDefault.indexOf("avatar") === -1; });
 
-    var videoEl = document.querySelector("video source, video");
-    var videoSrc = videoEl
-      ? (videoEl.src || videoEl.getAttribute("src") || "")
-      : "";
+  var videoEl = document.querySelector("video source, video");
+  var videoSrc = videoEl
+    ? (videoEl.src || videoEl.getAttribute("src") || "")
+    : "";
 
-    var authorEl =
-      document.querySelector(".author-container .username") ||
-      document.querySelector("[class*='author'] [class*='name']") ||
-      document.querySelector(".user-info .name");
-    var authorName = (authorEl && authorEl.textContent) ? authorEl.textContent.trim() : "";
+  var authorEl =
+    document.querySelector(".author-container .username") ||
+    document.querySelector("[class*='author'] [class*='name']") ||
+    document.querySelector(".user-info .name");
+  var authorName = (authorEl && authorEl.textContent) ? authorEl.textContent.trim() : "";
 
-    var tags = [];
-    document
-      .querySelectorAll('a[href*="search_result"], a[href*="tag"]')
-      .forEach(function(a) {
-        var text = (a.textContent || "").trim().replace(/^#/, "");
-        if (text) tags.push({ name: text });
-      });
+  var tags = [];
+  document
+    .querySelectorAll('a[href*="search_result"], a[href*="tag"]')
+    .forEach(function(a) {
+      var text = (a.textContent || "").trim().replace(/^#/, "");
+      if (text) tags.push({ name: text });
+    });
 
-    function parseCount(sel) {
-      var text = qs(sel);
-      return text.replace(/[^\\d]/g, "") || "0";
-    }
+  function parseCount(sel) {
+    var text = qs(sel);
+    return text.replace(/[^\\d]/g, "") || "0";
+  }
 
-    return {
-      title: title,
-      desc: desc,
-      imageList: imageList,
-      video: videoSrc
-        ? { consumer: { originVideoKey: videoSrc } }
-        : undefined,
-      tagList: tags,
-      user: { nickname: authorName },
-      time: 0,
-      interactInfo: {
-        likedCount: parseCount(".like-wrapper .count, [class*='like'] [class*='count']"),
-        collectedCount: parseCount(".collect-wrapper .count, [class*='collect'] [class*='count']"),
-        commentCount: parseCount(".chat-wrapper .count, [class*='comment'] [class*='count']"),
-      },
-      type: videoSrc ? "video" : "normal",
-    };
-  })()`) as unknown as RawNoteData;
-}
+  return {
+    title: title,
+    desc: desc,
+    imageList: imageList,
+    video: videoSrc
+      ? { consumer: { originVideoKey: videoSrc } }
+      : undefined,
+    tagList: tags,
+    user: { nickname: authorName },
+    time: 0,
+    interactInfo: {
+      likedCount: parseCount(".like-wrapper .count, [class*='like'] [class*='count']"),
+      collectedCount: parseCount(".collect-wrapper .count, [class*='collect'] [class*='count']"),
+      commentCount: parseCount(".chat-wrapper .count, [class*='comment'] [class*='count']"),
+    },
+    type: videoSrc ? "video" : "normal",
+  };
+})()`;
 
 // ---------------------------------------------------------------------------
-// Content fetch (Playwright)
+// Cookie helpers
 // ---------------------------------------------------------------------------
 
 function parseCookieString(
@@ -306,6 +286,10 @@ function parseCookieString(
   }>;
 }
 
+// ---------------------------------------------------------------------------
+// URL helpers
+// ---------------------------------------------------------------------------
+
 function isSecurityBlocked(url: string): boolean {
   try {
     const pathname = new URL(url).pathname;
@@ -321,6 +305,14 @@ function isNotePage(url: string): boolean {
   return NOTE_URL_RE.test(url);
 }
 
+// ---------------------------------------------------------------------------
+// Content fetch (CDP)
+// ---------------------------------------------------------------------------
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 async function fetchXiaohongshuData(
   noteId: string,
   originalUrl: string,
@@ -329,75 +321,63 @@ async function fetchXiaohongshuData(
   const noteUrl = `https://www.xiaohongshu.com/explore/${noteId}`;
 
   const browser = await withRetry(
-    () =>
-      chromium.launch({
-        headless: false,
-        args: [
-          "--disable-blink-features=AutomationControlled",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-        ],
-      }),
+    () => launchWithPage({ headless: false }),
     { maxAttempts: 2, baseDelayMs: 2000 },
   );
 
   try {
-    const context = await createStealthContext(browser);
+    const { page } = browser;
+
+    await page.addScriptOnNewDocument(STEALTH_SCRIPT);
 
     if (configCookie) {
       const parsed = parseCookieString(configCookie, ".xiaohongshu.com");
-      if (parsed.length) await context.addCookies(parsed);
+      if (parsed.length) await page.setCookies(parsed);
     }
 
-    const page = await context.newPage();
-    page.setDefaultTimeout(NAVIGATION_TIMEOUT);
-
-    await page.goto("https://www.xiaohongshu.com/explore", {
-      waitUntil: "domcontentloaded",
+    // Warm up: visit explore page first to establish session
+    await page.navigate("https://www.xiaohongshu.com/explore", {
+      timeout: NAVIGATION_TIMEOUT,
     });
-    await page.waitForTimeout(2000);
-    await page.mouse.move(300 + Math.random() * 200, 300 + Math.random() * 200);
-    await page.waitForTimeout(800 + Math.random() * 400);
-    await page.mouse.move(500 + Math.random() * 200, 250 + Math.random() * 150);
-    await page.waitForTimeout(1000 + Math.random() * 500);
+    await sleep(2000);
+    await page.mouseMove(300 + Math.random() * 200, 300 + Math.random() * 200);
+    await sleep(800 + Math.random() * 400);
+    await page.mouseMove(500 + Math.random() * 200, 250 + Math.random() * 150);
+    await sleep(1000 + Math.random() * 500);
 
-    // Navigate to the original URL (including short links) so the browser
-    // handles the full redirect chain with cookies intact.
-    await page.goto(originalUrl, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(3000);
+    // Navigate to the actual note
+    await page.navigate(originalUrl, { timeout: NAVIGATION_TIMEOUT });
+    await sleep(3000);
 
-    let currentUrl = page.url();
+    let currentUrl = await page.url();
 
-    // If we didn't land on the note page, try the constructed note URL
     if (isSecurityBlocked(currentUrl) || !isNotePage(currentUrl)) {
-      await page.waitForTimeout(1000 + Math.random() * 1000);
-      await page.goto(noteUrl, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(3000);
-      currentUrl = page.url();
+      await sleep(1000 + Math.random() * 1000);
+      await page.navigate(noteUrl, { timeout: NAVIGATION_TIMEOUT });
+      await sleep(3000);
+      currentUrl = await page.url();
     }
 
-    // Verify we actually reached a note page — refuse to extract from
-    // the homepage or any other unrelated page to avoid garbage data.
     const notePageMatch = currentUrl.match(NOTE_URL_RE);
     if (!notePageMatch) {
       throw new Error(
-        "被安全验证拦截，无法访问笔记页面。请更新 config.json 中的 cookies.xiaohongshu",
+        "被安全验证拦截，无法访问笔记页面。请更新 config.json 中的 cookies.xiaohongshu 或 .env 中的 LINKMIND_XHS_COOKIE",
       );
     }
     const actualNoteId = notePageMatch[1];
 
-    await page
-      .waitForSelector("#noteContainer, .note-container, .note-detail", {
-        timeout: CONTENT_WAIT_TIMEOUT,
-      })
-      .catch(() => {});
+    await page.waitForSelector(
+      "#noteContainer, .note-container, .note-detail",
+      CONTENT_WAIT_TIMEOUT,
+    );
+    await sleep(2000);
 
-    await page.waitForTimeout(2000);
-
-    let data = await extractFromInitialState(page, actualNoteId);
+    let data = await page.evaluate<RawNoteData | null>(
+      buildExtractScript(actualNoteId),
+    );
 
     if (!data || (!data.title && !data.desc)) {
-      data = await extractFromDOM(page);
+      data = await page.evaluate<RawNoteData>(DOM_EXTRACT_SCRIPT);
     }
 
     if (!data || (!data.title && !data.desc)) {
@@ -406,7 +386,6 @@ async function fetchXiaohongshuData(
       );
     }
 
-    await context.close();
     return data;
   } finally {
     await browser.close();
@@ -524,17 +503,19 @@ function categorizeError(e: unknown): { code: ErrorCode; details: string } {
   if (lower.includes("无法从 url") || lower.includes("无效"))
     return { code: "NOT_FOUND", details: "请检查链接是否正确" };
   if (lower.includes("登录") || lower.includes("login") || lower.includes("403") || lower.includes("安全验证"))
-    return { code: "AUTH", details: "该内容可能需要登录或 cookies 已过期，请在 config.json 中更新 cookies.xiaohongshu" };
+    return { code: "AUTH", details: "该内容可能需要登录或 cookies 已过期，请在 config.json 或 .env 中更新 cookies" };
   if (lower.includes("反爬") || lower.includes("拦截"))
     return { code: "RATE_LIMIT", details: "被反爬机制拦截，建议稍后重试或配置 cookies" };
   if (lower.includes("无法提取") || lower.includes("页面结构"))
     return { code: "PARSE", details: "内容解析失败，页面结构可能已变更" };
+  if (lower.includes("未找到 chrome"))
+    return { code: "NETWORK", details: "未找到系统 Chrome 浏览器，请安装 Google Chrome" };
   if (
     lower.includes("fetch") ||
     lower.includes("network") ||
     lower.includes("timeout") ||
     lower.includes("econnr") ||
-    lower.includes("browser")
+    lower.includes("chrome")
   )
     return { code: "NETWORK", details: "网络请求或浏览器启动失败，建议检查网络后重试" };
 
