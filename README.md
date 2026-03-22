@@ -204,47 +204,80 @@ Each captured note is a Markdown file with YAML frontmatter:
 
 ```markdown
 ---
-title: "成都美食探店推荐"
-date: 2026-03-22
+title: '深度解读ReAct：让大模型学会边思考边行动'
+date: 2026-03-18
 platform: weibo
-author: "美食达人"
-original_url: https://weibo.com/xxx/xxx
-captured_at: 2026-03-22T14:30:00.000Z
+author: 'AI前沿观察'
+original_url: "https://weibo.com/7654321098/ReAcTpaper"
+captured_at: 2026-03-22T10:15:00.000Z
 has_video: true
 has_transcript: true
+has_image_analysis: true
 ---
 
-# 成都美食探店推荐
+# 深度解读ReAct：让大模型学会边思考边行动
 
-> 来源：微博 @美食达人 | 2026-03-22
+> 来源：微博 @AI前沿观察 | 2026-03-18
 
 ## 深度总结
 
-（AI 生成的深度总结，综合原文文字 + 视频转写内容）
+**内容类型：** 教程
+
+**核心主题：** 解读 ReAct（Reasoning + Acting）框架，展示大模型如何通过交替生成推理轨迹和执行动作来完成复杂任务。
+
+**结构化摘要：**
+
+| 维度 | 内容 |
+|------|------|
+| 论文来源 | Yao et al., 2022, "ReAct: Synergizing Reasoning and Acting in Language Models" |
+| 核心思想 | 将 Chain-of-Thought 推理与外部工具调用交织，形成 Thought → Action → Observation 循环 |
+| 对比方法 | 纯 CoT（仅推理、易产生幻觉）、纯 Act（仅执行、缺乏规划） |
+| 典型应用 | HotpotQA 多跳问答、FEVER 事实验证、ALFWorld/WebShop 交互任务 |
 
 **关键要点：**
-- （要点一）
-- （要点二）
+- ReAct 让模型在每一步先输出 Thought（分析当前状态、制定计划），再输出 Action（调用搜索、查表等工具），最后接收 Observation（工具返回结果），形成闭环推理
+- 相比纯 Chain-of-Thought，ReAct 显著降低了幻觉率，因为推理过程有外部事实校验
+- ReAct 框架直接启发了 LangChain Agent、AutoGPT 等主流 AI Agent 架构的设计
 
 ## 原文内容
 
-（原始文字内容）
+【AI Agent必读论文】今天带大家深度拆解ReAct框架。
+
+一句话总结：让大模型不只是"想"，还要"做"——推理和行动交替进行，每一步都有外部世界的反馈来校正方向。
+
+传统的Chain-of-Thought让模型一口气想完再回答，问题是想多了容易产生幻觉。ReAct的做法是把推理拆成小步骤，每步推理后立刻执行一个动作（比如搜索），拿到真实结果后再继续推理。
+
+举个例子，问"乔布斯和比尔盖茨谁更年轻？"：
+- Thought 1: 我需要分别查两个人的出生年份
+- Action 1: Search[乔布斯 出生年份]
+- Observation 1: 1955年2月24日
+- Thought 2: 乔布斯1955年出生，现在查比尔盖茨
+- Action 2: Search[比尔盖茨 出生年份]
+- Observation 2: 1955年10月28日
+- Thought 3: 两人都是1955年出生，盖茨晚8个月，所以盖茨更年轻
+- Action 3: Finish[比尔盖茨]
+
+这个Thought→Action→Observation的循环就是ReAct的核心范式，也是今天几乎所有AI Agent框架的基础。
 
 ## 视频转写
 
-> 📎 字幕文件：[transcript.srt](attachments/2026-03-22-成都美食探店推荐/transcript.srt)
+> 📎 字幕文件：[transcript.srt](attachments/2026-03-18-深度解读ReAct-让大模型学会边思考边行动/transcript.srt)
 
-大家好，今天给大家分享一下成都的美食推荐……
+大家好，今天我们来聊一篇非常重要的论文，ReAct。这篇论文可以说是AI Agent领域的奠基之作。它的核心思想其实很简单，就是让大模型在回答问题的时候，不要一口气想完，而是边想边做。每想一步就执行一个动作，比如去搜索引擎查一下，拿到结果后再继续往下想……
 
 ## 图片
 
-![图片](attachments/2026-03-22-成都美食探店推荐/img-001.jpg)
+![图片](attachments/2026-03-18-深度解读ReAct-让大模型学会边思考边行动/img-001.jpg)
 
-> **图片内容：** 一张火锅店外观照片，招牌写着"老成都火锅"，门口有排队的顾客。
+> **图片内容：** ReAct框架流程图，左侧标注"Thought"（黄色），中间标注"Action"（蓝色），右侧标注"Observation"（绿色），箭头形成循环。底部对比了纯CoT（仅Thought链）和纯Act（仅Action链）的局限性。
+
+![图片](attachments/2026-03-18-深度解读ReAct-让大模型学会边思考边行动/img-002.jpg)
+
+> **图片内容：** HotpotQA实验结果表格，ReAct在Exact Match上达到35.1%，优于纯CoT的29.4%和纯Act的25.7%。标注"ReAct + CoT-SC"组合方法达到最佳成绩40.2%。
 
 ## 元信息
 
-- 转发: 123 | 评论: 45 | 点赞: 678
+- 转发: 2.1k | 评论: 387 | 点赞: 5.6k
 ```
 
 ## Roadmap
