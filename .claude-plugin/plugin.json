@@ -1,7 +1,7 @@
 {
   "name": "linkmind-capture",
-  "version": "0.1.1",
-  "description": "Capture social media content (Weibo, Xiaohongshu) into Obsidian vault as structured Markdown notes with AI deep summary, image analysis, and video transcript.",
+  "version": "0.1.2",
+  "description": "Capture social media content (Weibo, Xiaohongshu, WeChat) into Obsidian vault as structured Markdown notes with AI deep summary, image analysis, and video transcript.",
   "author": {
     "name": "tt-bltn",
     "url": "https://github.com/tt-bltn"
