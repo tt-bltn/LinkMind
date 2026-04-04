@@ -285,8 +285,6 @@ export async function downloadMedia(
       "-x",
       "--audio-format", "mp3",
       "--audio-quality", "5",
-      "--referer", referer,
-      "--add-header", `User-Agent:${MOBILE_UA}`,
       "-o", `${templateBase}.%(ext)s`,
       "--no-playlist",
       "--quiet",
