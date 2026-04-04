@@ -75,7 +75,7 @@ export interface XiaoyuzhouContent extends CapturedContent {
   timestampSeconds: number | null;  // 分享时打点的时间（秒），无则 null
   subtitleUrl: string | null;       // 平台提供的字幕文件 URL，无则 null
   description: string;              // 节目 shownotes / 简介
-  audioUrl: string;
+  audioUrl: string;                 // 音频文件直链（用于下载音频或 ASR 提取）
 }
 
 export function isError(result: HandlerResult): result is HandlerError {
