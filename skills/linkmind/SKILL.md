@@ -59,13 +59,14 @@ See the Cookie and ASR configuration sections below for details.
 
 Match the URL against these patterns:
 
-| Platform       | URL patterns                                                 |
-|----------------|--------------------------------------------------------------|
-| **Weibo**      | `weibo.com`, `m.weibo.cn`                                   |
-| **Xiaohongshu**| `xiaohongshu.com`, `xhslink.com`                            |
+| Platform        | URL patterns                                                  |
+|-----------------|---------------------------------------------------------------|
+| **Weibo**       | `weibo.com`, `m.weibo.cn`                                    |
+| **Xiaohongshu** | `xiaohongshu.com`, `xhslink.com`                             |
+| **WeChat**      | `mp.weixin.qq.com`                                           |
 
 If the URL does not match any supported platform, tell the user:
-"目前 LinkMind 支持微博和小红书链接，该链接暂不支持。"
+"目前 LinkMind 支持微博、小红书和微信公众号链接，该链接暂不支持。"
 
 ## Step 2: Run the handler script
 
@@ -80,6 +81,11 @@ npx tsx skills/linkmind/scripts/weibo.ts "<URL>" --config skills/linkmind/config
 **Xiaohongshu:**
 ```bash
 npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
+```
+
+**WeChat:**
+```bash
+npx tsx skills/linkmind/scripts/wechat.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
@@ -100,7 +106,7 @@ locally so the note is fully viewable offline in Obsidian.
 npx tsx skills/linkmind/scripts/download-images.ts \
   --urls "{comma-separated image URLs}" \
   --output-dir "{attachments directory}" \
-  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
 ```
 
 4. The script outputs a JSON mapping: `{ "original_url": "img-001.jpg", ... }`.
@@ -165,7 +171,7 @@ npx tsx skills/linkmind/scripts/extract-transcript.ts \
   --video-url "<VIDEO_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
-  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
 ```
 
 3. The script outputs JSON to stdout:
@@ -326,7 +332,10 @@ If content requires login, configure platform cookies using **either** method:
 ```bash
 LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
 LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
+LINKMIND_WXMP_COOKIE="appmsgticket=xxx; wxuin=xxx; ..."
 ```
+
+> 注：WeChat Cookie 用于获取阅读/点赞/在看统计数据，不影响基础文章提取。
 
 **Method B — config.json:**
 
@@ -335,7 +344,8 @@ LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
   "obsidian_vault": "/path/to/vault",
   "cookies": {
     "weibo": "SUB=xxx; SUBP=yyy",
-    "xiaohongshu": "a1=xxx; web_session=yyy"
+    "xiaohongshu": "a1=xxx; web_session=yyy",
+    "wechat": "appmsgticket=xxx; wxuin=xxx; ..."
   }
 }
 ```
