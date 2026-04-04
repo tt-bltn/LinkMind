@@ -8,6 +8,8 @@ import {
   parseLfasrResult,
   checkDependency,
 } from "./extract-transcript.js";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 let passed = 0;
 let failed = 0;
@@ -183,3 +185,56 @@ if (!isE2E) {
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 }
+
+// ---------------------------------------------------------------------------
+// E2E tests (--e2e flag, requires real credentials + yt-dlp + ffmpeg)
+// ---------------------------------------------------------------------------
+
+async function runE2E(): Promise<void> {
+  console.log("\n=== E2E Tests (requires ASR credentials) ===");
+
+  // Replace with a real Weibo video URL for testing
+  const testVideoUrl = process.env.TEST_VIDEO_URL ??
+    "https://weibo.com/1197161814/P9YdE2UhJ"; // example, may expire
+
+  const tmpOutputDir = `/tmp/linkmind-e2e-${Date.now()}`;
+  const configPath = process.env.TEST_CONFIG_PATH ??
+    new URL("../config.json", import.meta.url).pathname;
+
+  console.log(`  Testing URL: ${testVideoUrl}`);
+
+  const result = spawnSync(
+    "npx",
+    [
+      "tsx", "extract-transcript.ts",
+      "--media-url", testVideoUrl,
+      "--output-dir", tmpOutputDir,
+      "--config", configPath,
+      "--referer", "https://weibo.com",
+    ],
+    { encoding: "utf-8", timeout: 15 * 60 * 1000 },
+  );
+
+  let output: { srtPath?: string; fullText?: string; error?: string } = {};
+  try {
+    output = JSON.parse(result.stdout);
+  } catch {
+    console.log(`  ✗ 无法解析输出: ${result.stdout}`);
+    process.exit(1);
+  }
+
+  assert(!output.error, `转写成功（无 error 字段）: ${output.error ?? ""}`);
+  assert(!!output.srtPath, "输出包含 srtPath");
+  assert(!!output.fullText && output.fullText.length > 0, "fullText 非空");
+
+  const srtFile = `${tmpOutputDir}/transcript.srt`;
+  assert(existsSync(srtFile), `SRT 文件已生成: ${srtFile}`);
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+runE2E().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -15,7 +15,10 @@
     "test:xhs:e2e": "tsx test-xiaohongshu.ts --e2e",
     "wechat": "tsx wechat.ts",
     "test:wechat": "tsx test-wechat.ts",
-    "test:wechat:e2e": "tsx test-wechat.ts --e2e"
+    "test:wechat:e2e": "tsx test-wechat.ts --e2e",
+    "transcript": "tsx extract-transcript.ts",
+    "test:transcript": "tsx test-transcript.ts",
+    "test:transcript:e2e": "tsx test-transcript.ts --e2e"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
