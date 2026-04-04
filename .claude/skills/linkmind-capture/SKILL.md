@@ -251,7 +251,7 @@ Select 3 quotes using the type-quota system below. For each selected quote at
 SRT entry index i, calculate:
   approx_seconds = (i / N_total) × total_duration_seconds
   percent = round(i / N_total × 100)
-  display as: `~MM:SS`（视频约 P% 处）
+  display as: `~MM:SS`（视频约 {percent}% 处）
 
 **Type quota — select one quote of each type, in priority order:**
 
@@ -267,12 +267,13 @@ SRT entry index i, calculate:
 **Fallback rule:** If a type has no suitable candidate in the full transcript,
 substitute the best remaining quote of any type. Max 1 fallback per note.
 Never use the same type twice across the 3 quotes.
+Example: if no 概念定义型 candidate exists, select a second 观点型 entry — but do not then also substitute for 行动指导型.
 
 **Universal filters — exclude any entry that:**
-- Starts with pure filler with no substantive content (e.g., only "呢", "啊", "那个那个")
-- Has an SRT entry index within N_total × 10% of an already-selected entry (avoid clustering)
+- Contains no substantive content — the entire entry consists only of filler words or sounds (e.g., "呢", "啊", "那个那个", "嗯", "就是说"); entries that begin with filler but contain meaningful content are still eligible
+- Falls within 10% of total video duration (in seconds) of an already-selected entry (avoid temporal clustering)
 
-Do NOT label quote types in the note output.:)
+Do NOT label quote types in the note output.
 
 > "（金句原文）"
 > —— `~MM:SS`（视频约 X% 处）
