@@ -386,6 +386,7 @@ flowchart TD
 skills/linkmind/                 # 可独立分发的单元
 ├── SKILL.md                     # AI 指令（含 metadata.openclaw）
 ├── config.template.json         # 配置模板（不含真实值）
+├── .env.example                 # 凭据模板（Cookie、ASR 密钥）
 ├── scripts/                     # 重命名自 handlers/
 │   ├── package.json
 │   ├── types.ts
@@ -452,9 +453,9 @@ flowchart LR
 | 配置项      | 当前                  | Step 7 目标                    |
 | -------- | ------------------- | ---------------------------- |
 | Vault 路径 | `config.json`       | `config.json`（保持，由安装工具从模板生成） |
-| Cookies  | `config.json`       | `.env` 文件（敏感信息不进版本控制）        |
-| ASR 密钥   | `config.json`       | `.env` 文件                    |
-| 仓库中的配置   | `config.json`（含真实值） | `config.template.json`（仅模板）  |
+| Cookies  | `config.json`       | `.env` 文件（可选，仅用于登录内容）        |
+| ASR 密钥   | `config.json`       | `.env` 文件（可选，用于视频转写）         |
+| 仓库中的配置   | `config.json`（含真实值） | `config.template.json` + `.env.example`（仅模板） |
 
 
 **配置优先级：**

@@ -35,6 +35,7 @@ LinkMind/
 ├── skills/linkmind/           # Self-contained distributable skill
 │   ├── SKILL.md               # AI workflow instructions (with OpenClaw metadata)
 │   ├── config.template.json   # Config template (copy to config.json)
+│   ├── .env.example           # Credentials template (copy to .env)
 │   ├── scripts/
 │   │   ├── types.ts           # Shared type definitions
 │   │   ├── setup.ts           # Interactive setup wizard
@@ -79,7 +80,7 @@ Notes are saved to your Obsidian vault:
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
 - **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
 - **Video ASR transcript** — Extract audio from videos, transcribe via iFlytek or OpenAI Whisper, save as SRT subtitles; transcript text is used in AI summary generation
-- **Cookie support** — Configure login cookies for accessing private or login-gated content
+- **Cookie support** (optional) — Configure login cookies for accessing private or login-gated content; not required for public posts
 - **Auto-retry** — Network requests retry with exponential backoff; errors are categorized with actionable suggestions
 
 ## Installation
@@ -146,8 +147,8 @@ npm run setup
 
 The wizard will guide you through:
 - **Obsidian vault path** (required) — validates the path exists
-- **Platform cookies** (optional) — for accessing login-gated content
-- **ASR credentials** (optional) — for video transcript (iFlytek / OpenAI Whisper)
+- **Platform cookies** (optional) — only needed when capturing login-gated content; not required for basic use
+- **ASR credentials** (optional) — for video transcript (iFlytek / OpenAI Whisper); without it video posts are still captured, just without transcript
 
 Non-sensitive config is written to `config.json`, credentials go to `.env`.
 
@@ -172,21 +173,12 @@ Edit `skills/linkmind/config.json` and set your vault path:
 }
 ```
 
-Create `skills/linkmind/.env` for sensitive credentials:
+Optionally, copy `.env.example` and fill in credentials (cookies, ASR keys).
+These are **not required** for basic use — see comments in the file for details:
 
 ```bash
-# Platform cookies (for login-gated content)
-LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
-LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
-
-# ASR credentials (for video transcript)
-LINKMIND_IFLYTEK_APP_ID=your_app_id
-LINKMIND_IFLYTEK_API_KEY=your_api_key
-LINKMIND_IFLYTEK_API_SECRET=your_api_secret
-LINKMIND_OPENAI_API_KEY=sk-xxx
+cp skills/linkmind/.env.example skills/linkmind/.env
 ```
-
-Environment variables take precedence over `config.json` values.
 
 </details>
 

@@ -104,7 +104,7 @@ async function main() {
   // --- 2. Cookies (optional → .env) ---
 
   const wantCookies = await p.confirm({
-    message: "是否配置平台 Cookie？（用于获取需登录的内容，可稍后在 .env 中配置）",
+    message: "是否配置平台 Cookie？（可选，仅用于获取需登录的内容，不配置不影响基础功能）",
     initialValue: false,
   });
   if (p.isCancel(wantCookies)) cancelled();
@@ -139,7 +139,7 @@ async function main() {
   // --- 3. ASR (optional → .env) ---
 
   const wantAsr = await p.confirm({
-    message: "是否配置视频转写 (ASR)？（讯飞 / OpenAI Whisper，可稍后配置）",
+    message: "是否配置视频转写 (ASR)？（可选，不配置不影响基础功能，视频帖仍可抓取但无转写）",
     initialValue: false,
   });
   if (p.isCancel(wantAsr)) cancelled();

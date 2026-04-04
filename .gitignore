@@ -10,6 +10,7 @@ skills/linkmind/config.json
 # Environment and secrets
 .env
 .env.*
+!.env.example
 
 # OS
 .DS_Store
@@ -24,3 +25,6 @@ Thumbs.db
 # TypeScript build output
 dist/
 *.tsbuildinfo
+
+# Git worktrees
+.worktrees/

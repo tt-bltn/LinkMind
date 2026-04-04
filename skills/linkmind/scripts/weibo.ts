@@ -307,7 +307,7 @@ function categorizeError(e: unknown): { code: ErrorCode; details: string } {
   if (status === 404 || lower.includes("无法从 url"))
     return { code: "NOT_FOUND", details: "请检查链接是否正确" };
   if (status === 403 || status === 401 || lower.includes("登录"))
-    return { code: "AUTH", details: "该内容可能需要登录，请在 config.json 中配置 cookies.weibo" };
+    return { code: "AUTH", details: "该内容可能需要登录，请在 .env 中配置 LINKMIND_WEIBO_COOKIE（参考 .env.example）" };
   if (status === 429 || lower.includes("rate") || lower.includes("频繁"))
     return { code: "RATE_LIMIT", details: "请求过于频繁，建议稍后重试" };
   if (lower.includes("无法获取") || lower.includes("parse") || lower.includes("解析"))

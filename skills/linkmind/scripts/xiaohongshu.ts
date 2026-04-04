@@ -361,7 +361,7 @@ async function fetchXiaohongshuData(
     const notePageMatch = currentUrl.match(NOTE_URL_RE);
     if (!notePageMatch) {
       throw new Error(
-        "被安全验证拦截，无法访问笔记页面。请更新 config.json 中的 cookies.xiaohongshu 或 .env 中的 LINKMIND_XHS_COOKIE",
+        "被安全验证拦截，无法访问笔记页面。请在 .env 中配置 LINKMIND_XHS_COOKIE（参考 .env.example）",
       );
     }
     const actualNoteId = notePageMatch[1];
@@ -503,7 +503,7 @@ function categorizeError(e: unknown): { code: ErrorCode; details: string } {
   if (lower.includes("无法从 url") || lower.includes("无效"))
     return { code: "NOT_FOUND", details: "请检查链接是否正确" };
   if (lower.includes("登录") || lower.includes("login") || lower.includes("403") || lower.includes("安全验证"))
-    return { code: "AUTH", details: "该内容可能需要登录或 cookies 已过期，请在 config.json 或 .env 中更新 cookies" };
+    return { code: "AUTH", details: "该内容可能需要登录或 cookies 已过期，请在 .env 中配置 LINKMIND_XHS_COOKIE（参考 .env.example）" };
   if (lower.includes("反爬") || lower.includes("拦截"))
     return { code: "RATE_LIMIT", details: "被反爬机制拦截，建议稍后重试或配置 cookies" };
   if (lower.includes("无法提取") || lower.includes("页面结构"))
