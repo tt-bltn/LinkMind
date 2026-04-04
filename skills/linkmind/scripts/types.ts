@@ -39,6 +39,7 @@ export type ErrorCode =
   | "RATE_LIMIT"
   | "NOT_FOUND"
   | "PARSE"
+  | "DEPENDENCY"
   | "UNKNOWN";
 
 export interface HandlerError {
