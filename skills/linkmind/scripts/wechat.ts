@@ -167,6 +167,112 @@ export function parseWechatHtml(html: string, originalUrl: string): WechatConten
 }
 
 // ---------------------------------------------------------------------------
+// Validity check
+// ---------------------------------------------------------------------------
+
+function isExtractionValid(content: WechatContent): boolean {
+  return content.title.length > 0 && content.text.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Stats API (optional, requires cookie)
+// ---------------------------------------------------------------------------
+
+interface WechatStats {
+  readCount: number | null;
+  likeCount: number | null;
+  inLookCount: number | null;
+}
+
+async function fetchStats(
+  pageHtml: string,
+  pageUrl: string,
+  cookie: string,
+): Promise<WechatStats> {
+  const empty: WechatStats = { readCount: null, likeCount: null, inLookCount: null };
+  try {
+    const appmsgtoken = extractHtmlVar(pageHtml, "appmsgtoken");
+    if (!appmsgtoken) return empty;
+
+    const u = new URL(pageUrl);
+    const biz = u.searchParams.get("__biz");
+    const mid = u.searchParams.get("mid");
+    const sn = u.searchParams.get("sn");
+    const idx = u.searchParams.get("idx") ?? "1";
+
+    if (!biz || !mid || !sn) {
+      // Short-form URL: lacks mid/sn in URL; skip stats
+      return empty;
+    }
+
+    const statsUrl = `https://mp.weixin.qq.com/mp/getappmsgext?__biz=${biz}&mid=${mid}&sn=${sn}&idx=${idx}&appmsgtoken=${encodeURIComponent(appmsgtoken)}&f=json`;
+
+    const resp = await fetch(statsUrl, {
+      headers: {
+        "User-Agent": DESKTOP_UA,
+        Referer: pageUrl,
+        Cookie: cookie,
+      },
+    });
+
+    if (!resp.ok) return empty;
+    const json = await resp.json() as Record<string, any>;
+    const stat = json?.appmsgstat;
+    if (!stat) return empty;
+
+    return {
+      readCount: typeof stat.read_num === "number" ? stat.read_num : null,
+      likeCount: typeof stat.like_num === "number" ? stat.like_num : null,
+      inLookCount: typeof stat.old_like_num === "number" ? stat.old_like_num : null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP fetch path
+// ---------------------------------------------------------------------------
+
+async function fetchViaHttp(url: string, cookie?: string): Promise<WechatContent | null> {
+  const headers: Record<string, string> = {
+    "User-Agent": DESKTOP_UA,
+    Accept: "text/html,application/xhtml+xml",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+  };
+  if (cookie) headers["Cookie"] = cookie;
+
+  let resp: Response;
+  try {
+    resp = await withRetry(
+      () =>
+        fetch(url, { headers, redirect: "follow" }),
+      { shouldRetry: isRetryableError },
+    );
+  } catch {
+    return null;
+  }
+
+  if (resp.status === 403 || resp.status === 401) return null;
+  if (!resp.ok) return null;
+
+  const html = await resp.text();
+  const content = parseWechatHtml(html, url);
+
+  if (!isExtractionValid(content)) return null;
+
+  // Try to fetch stats if cookie present
+  if (cookie) {
+    const stats = await fetchStats(html, url, cookie);
+    content.readCount = stats.readCount;
+    content.likeCount = stats.likeCount;
+    content.inLookCount = stats.inLookCount;
+  }
+
+  return content;
+}
+
+// ---------------------------------------------------------------------------
 // Main (stub)
 // ---------------------------------------------------------------------------
 
