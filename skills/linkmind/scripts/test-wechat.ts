@@ -220,6 +220,64 @@ var desc = "这是文章摘要";
   assertEqual(result2.coverImage, "https://og-fallback.jpg", "cover 为空时回退到 og:image");
 }
 
+// ---------------------------------------------------------------------------
+// E2E: Full handler pipeline
+// ---------------------------------------------------------------------------
+
+async function testE2E(): Promise<void> {
+  console.log("\n[E2E] 用真实微信文章链接运行处理器...");
+
+  // 一篇公开可访问的微信文章（公开测试用）
+  const testUrl =
+    "https://mp.weixin.qq.com/s/5IpMVx0Lk7fBJRN-FXdFsA";
+
+  try {
+    const { stdout } = await exec(
+      "npx",
+      ["tsx", "wechat.ts", testUrl],
+      { cwd: import.meta.dirname, timeout: 30_000 },
+    );
+
+    let result: Record<string, any>;
+    try {
+      result = JSON.parse(stdout);
+    } catch {
+      assert(false, "stdout 是合法 JSON");
+      console.log("  Raw stdout:", stdout.slice(0, 200));
+      return;
+    }
+
+    if (result.error) {
+      console.log(`  ⚠ 处理器返回错误: ${result.error} (code: ${result.code})`);
+      console.log(`  详情: ${result.details}`);
+      // E2E 中网络/认证错误不算测试失败（环境问题）
+      if (result.code === "NETWORK" || result.code === "AUTH") {
+        console.log("  → 跳过 E2E 断言（网络/认证问题）");
+        return;
+      }
+      assert(false, `处理器成功返回内容（错误: ${result.error}）`);
+      return;
+    }
+
+    assert(true, "stdout 是合法 JSON");
+    assertEqual(result.platform, "wechat", "platform 为 wechat");
+    assert(typeof result.author === "string" && result.author.length > 0, "author 非空");
+    assert(typeof result.text === "string" && result.text.length > 0, "text 非空");
+    assert(typeof result.date === "string" && /\d{4}-\d{2}-\d{2}/.test(result.date), "date 格式正确");
+    assert(typeof result.title === "string" && result.title.length > 0, "title 非空");
+    assert(typeof result.fetchedAt === "string", "fetchedAt 存在");
+
+    console.log(`  → Author: ${result.author}`);
+    console.log(`  → Title: ${result.title}`);
+    console.log(`  → Date: ${result.date}`);
+    console.log(`  → Images: ${result.images?.length ?? 0}`);
+    console.log(`  → Digest: ${(result.digest ?? "").slice(0, 50)}`);
+    console.log(`  → Stats: reads=${result.readCount} likes=${result.likeCount} inLooks=${result.inLookCount}`);
+  } catch (e: any) {
+    assert(false, `处理器正常执行（${e.message}）`);
+  }
+}
+
 async function run(): Promise<void> {
   const runE2E = process.argv.includes("--e2e");
 
@@ -233,7 +291,7 @@ async function run(): Promise<void> {
   testParseWechatHtml();
 
   if (runE2E) {
-    console.log("\n[E2E] 将在 Task 8 中添加");
+    await testE2E();
   } else {
     console.log("\n[E2E] Skipped (pass --e2e to run)");
   }
