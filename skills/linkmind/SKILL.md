@@ -47,9 +47,9 @@ The config file structure:
 }
 ```
 
-Sensitive credentials (cookies, ASR keys) can also be set via environment
-variables in `skills/linkmind/.env` — these override values in `config.json`.
-See the Cookie and ASR configuration sections below for details.
+Sensitive credentials (cookies, ASR keys) are configured in
+`skills/linkmind/.env`. See the Cookie and ASR configuration sections below.
+Cookies and ASR are **optional** — basic content capture works without them.
 
 - If `obsidian_vault` is empty, ask the user to configure it.
 - Verify the vault directory exists. If not, inform the user that the path is invalid.
@@ -154,7 +154,7 @@ visual content using your multimodal capabilities.
 ## Step 2.7: Extract video transcript (if applicable)
 
 If the JSON contains a non-null `videoUrl` field **and** the user has configured
-ASR in `config.json`, extract the audio and transcribe it.
+ASR credentials in `.env`, extract the audio and transcribe it.
 
 1. Ensure the attachments directory exists (same as Step 2.5):
    `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/`
@@ -183,8 +183,8 @@ npx tsx skills/linkmind/scripts/extract-transcript.ts \
 
 **Skip conditions (do NOT run the script):**
 - `videoUrl` is `null` → no video to transcribe
-- `config.json` has no `asr` section, or `asr` fields are empty → ASR not configured;
-  inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 config.json 中配置。"
+- `.env` has no ASR variables configured → ASR not configured;
+  inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 .env 中配置。参考 .env.example。"
 
 ## Step 3: Generate the Markdown file
 
@@ -319,37 +319,28 @@ incorporate image analysis and video transcript when available.
 
 ## Cookie configuration (optional)
 
-If content requires login, configure platform cookies using **either** method:
+Cookies are **optional**. They are only needed when capturing content that
+requires login (e.g. private or restricted posts). Public content can be
+captured without any cookie configuration.
 
-**Method A — Environment variables** (recommended, in `skills/linkmind/.env`):
+Configure platform cookies in `skills/linkmind/.env`
+(copy from `.env.example` if the file does not exist):
 
 ```bash
 LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
 LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
 ```
 
-**Method B — config.json:**
-
-```json
-{
-  "obsidian_vault": "/path/to/vault",
-  "cookies": {
-    "weibo": "SUB=xxx; SUBP=yyy",
-    "xiaohongshu": "a1=xxx; web_session=yyy"
-  }
-}
-```
-
-Environment variables take precedence over `config.json` values.
-
 To obtain cookies: log in to the platform in a browser, open DevTools → Application →
 Cookies, and copy the relevant cookie values as a semicolon-separated string.
 
 ## ASR configuration (optional — required for video transcript)
 
-Configure ASR credentials using **either** method:
+ASR is **optional**. Without it, video posts are still captured normally — only
+the transcript feature is unavailable.
 
-**Method A — Environment variables** (recommended, in `skills/linkmind/.env`):
+Configure ASR credentials in `skills/linkmind/.env`
+(copy from `.env.example` if the file does not exist):
 
 ```bash
 LINKMIND_IFLYTEK_APP_ID=your_app_id
@@ -358,30 +349,9 @@ LINKMIND_IFLYTEK_API_SECRET=your_api_secret
 LINKMIND_OPENAI_API_KEY=sk-xxx
 ```
 
-**Method B — config.json:**
-
-```json
-{
-  "obsidian_vault": "/path/to/vault",
-  "asr": {
-    "provider": "iflytek",
-    "iflytek": {
-      "app_id": "your_app_id",
-      "api_key": "your_api_key",
-      "api_secret": "your_api_secret"
-    },
-    "openai": {
-      "api_key": "sk-xxx",
-      "base_url": "https://api.openai.com/v1"
-    }
-  }
-}
-```
-
-- `provider`: preferred ASR service — `"iflytek"` (default) or `"openai"`
 - Configure at least one service to enable video transcript
-- If both are configured, the preferred provider is tried first; on failure,
-  the other is used as fallback
+- If both are configured, iFlytek is tried first; on failure,
+  OpenAI is used as fallback
 - To obtain iFlytek credentials: register at https://www.xfyun.cn/, create an
   app, enable "语音转写" service, and copy the App ID / API Key / API Secret
 - To obtain OpenAI key: https://platform.openai.com/api-keys

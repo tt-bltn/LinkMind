@@ -35,6 +35,7 @@ LinkMind/
 ├── skills/linkmind/           # 可独立分发的 skill 目录
 │   ├── SKILL.md               # AI 工作流指令（含 OpenClaw 元数据）
 │   ├── config.template.json   # 配置模板（复制为 config.json 使用）
+│   ├── .env.example           # 凭据模板（复制为 .env 使用）
 │   ├── scripts/
 │   │   ├── types.ts           # 共享类型定义
 │   │   ├── setup.ts           # 交互式配置向导
@@ -79,7 +80,7 @@ LinkMind/
 - **图片下载** — 图片保存到知识库的 `LinkMind/attachments/` 目录，支持完全离线访问
 - **图片多模态分析** — AI 读取每张下载的图片，提取可见文字（OCR）和关键视觉信息，分析结果附加在笔记中每张图片后，并融入深度总结
 - **视频 ASR 转写** — 从视频中提取音频，通过讯飞或 OpenAI Whisper 转写，保存为 SRT 字幕；转写文本用于 AI 总结生成
-- **Cookie 支持** — 配置登录 Cookie 以访问需要登录的内容
+- **Cookie 支持**（可选）— 配置登录 Cookie 以访问需要登录的内容，公开内容无需配置
 - **自动重试** — 网络请求自动指数退避重试；错误按类型分类并提供可操作的建议
 
 ## 安装
@@ -146,8 +147,8 @@ npm run setup
 
 向导将引导你完成：
 - **Obsidian 知识库路径**（必填）— 会验证路径是否存在
-- **平台 Cookie**（可选）— 用于获取需要登录的内容
-- **ASR 凭据**（可选）— 用于视频转写（讯飞 / OpenAI Whisper）
+- **平台 Cookie**（可选）— 仅在需要获取登录后才可见的内容时使用，不配置不影响基础功能
+- **ASR 凭据**（可选）— 用于视频转写（讯飞 / OpenAI Whisper），不配置时视频帖仍可抓取但无转写
 
 非敏感配置写入 `config.json`，凭据写入 `.env`。
 
@@ -172,21 +173,12 @@ cp skills/linkmind/config.template.json skills/linkmind/config.json
 }
 ```
 
-创建 `skills/linkmind/.env` 存放敏感凭据：
+可选：复制 `.env.example` 并填入凭据（Cookie、ASR 密钥）。
+这些配置**不是必须的**，不配置不影响基础抓取功能，详见文件内注释：
 
 ```bash
-# 平台 Cookie（用于需要登录的内容）
-LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
-LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
-
-# ASR 凭据（用于视频转写）
-LINKMIND_IFLYTEK_APP_ID=your_app_id
-LINKMIND_IFLYTEK_API_KEY=your_api_key
-LINKMIND_IFLYTEK_API_SECRET=your_api_secret
-LINKMIND_OPENAI_API_KEY=sk-xxx
+cp skills/linkmind/.env.example skills/linkmind/.env
 ```
-
-同时设置时环境变量优先。
 
 </details>
 
