@@ -52,15 +52,17 @@ export function formatSrtTime(ms: number): string {
 // iFlytek LFASR result parsing
 // ---------------------------------------------------------------------------
 
-interface LfasrWord {
-  wb: number;  // word begin (10ms units)
-  we: number;  // word end (10ms units)
-  w: string;   // word text
+// Actual iFlytek LFASR v2 word structure (ws = word segment)
+interface LfasrWordSegment {
+  wb: number;              // word begin (10ms units)
+  we: number;              // word end (10ms units)
+  cw: Array<{ w: string }>;// candidate words (cw[0] = best)
 }
 
 /**
  * Parse iFlytek LFASR orderResult JSON string → SRT + fullText
- * Time unit in iFlytek response: 10ms (multiply × 10 to get ms)
+ * Actual structure: lattice[].json_1best → { st: { rt: [{ ws: LfasrWordSegment[] }] } }
+ * Time unit: 10ms per unit (multiply × 10 to get ms)
  */
 export function parseLfasrResult(orderResult: string): AsrResult {
   const data = JSON.parse(orderResult) as {
@@ -71,14 +73,14 @@ export function parseLfasrResult(orderResult: string): AsrResult {
 
   for (const item of data.lattice ?? []) {
     const sentence = JSON.parse(item.json_1best) as {
-      rt: Array<{ w: LfasrWord[] }>;
+      st: { rt: Array<{ ws: LfasrWordSegment[] }> };
     };
-    const words: LfasrWord[] = (sentence.rt ?? []).flatMap((rt) => rt.w ?? []);
+    const words: LfasrWordSegment[] = (sentence.st?.rt ?? []).flatMap((rt) => rt.ws ?? []);
     if (words.length === 0) continue;
 
     const start = words[0].wb * 10;
     const end = words[words.length - 1].we * 10;
-    const text = words.map((w) => w.w).join("").trim();
+    const text = words.map((w) => w.cw[0]?.w ?? "").join("").trim();
     if (text) entries.push({ start, end, text });
   }
 
@@ -142,26 +144,69 @@ const LFASR_QUERY_URL  = "https://raasr.xfyun.cn/v2/api/getResult";
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS  = 10 * 60 * 1_000; // 10 minutes
 
+/**
+ * Convert audio to 16kHz mono mp3 (required by iFlytek LFASR).
+ * Returns the converted file path; caller must delete it.
+ */
+function convertTo16kHz(inputPath: string): string {
+  const outputPath = `${inputPath}.16k.mp3`;
+  const result = spawnSync(
+    "ffmpeg",
+    ["-i", inputPath, "-ar", "16000", "-ac", "1", "-f", "mp3", "-y", outputPath],
+    { encoding: "utf-8", timeout: 5 * 60 * 1_000 },
+  );
+  if (result.status !== 0) {
+    throw new Error(`音频转换失败: ${result.stderr}`);
+  }
+  return outputPath;
+}
+
+/** Get audio duration in milliseconds using ffprobe. */
+function getAudioDurationMs(filePath: string): number {
+  const result = spawnSync(
+    "ffprobe",
+    ["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath],
+    { encoding: "utf-8" },
+  );
+  const seconds = parseFloat(result.stdout?.trim() ?? "0");
+  return Math.round(seconds * 1_000);
+}
+
 export async function transcribeIflytek(
   mp3Path: string,
   appId: string,
   secretKey: string,
 ): Promise<AsrResult> {
+  // iFlytek LFASR requires 8kHz or 16kHz audio; convert if needed.
+  const converted = convertTo16kHz(mp3Path);
+  try {
+    return await _uploadAndPollIflytek(converted, appId, secretKey);
+  } finally {
+    try { if (existsSync(converted)) unlinkSync(converted); } catch { /* ignore */ }
+  }
+}
+
+async function _uploadAndPollIflytek(
+  mp3Path: string,
+  appId: string,
+  secretKey: string,
+): Promise<AsrResult> {
   // 1. Upload
+  // iFlytek LFASR v2 expects raw binary body; auth + file metadata in query string.
   const { ts, signa } = iflytekAuth(appId, secretKey);
-  const authQuery = `appId=${appId}&ts=${ts}&signa=${encodeURIComponent(signa)}`;
-
   const fileBuffer = readFileSync(mp3Path);
-  const form = new FormData();
-  form.append(
-    "file",
-    new Blob([fileBuffer], { type: "audio/mp3" }),
-    "audio.mp3",
-  );
+  const durationMs = getAudioDurationMs(mp3Path);
+  const uploadParams = new URLSearchParams({
+    appId, ts, signa,
+    fileSize: String(fileBuffer.length),
+    fileName: "audio.mp3",
+    duration: String(durationMs),
+  });
 
-  const uploadResp = await fetch(`${LFASR_UPLOAD_URL}?${authQuery}`, {
+  const uploadResp = await fetch(`${LFASR_UPLOAD_URL}?${uploadParams}`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: fileBuffer,
   });
   if (!uploadResp.ok) {
     throw new Error(`讯飞上传失败: HTTP ${uploadResp.status}`);
@@ -169,12 +214,12 @@ export async function transcribeIflytek(
   const uploadJson = (await uploadResp.json()) as {
     code: string;
     descInfo?: string;
-    data?: { taskId?: string };
+    content?: { orderId?: string };
   };
-  if (uploadJson.code !== "000000" || !uploadJson.data?.taskId) {
+  if (uploadJson.code !== "000000" || !uploadJson.content?.orderId) {
     throw new Error(`讯飞上传错误: ${uploadJson.descInfo ?? uploadJson.code}`);
   }
-  const taskId = uploadJson.data.taskId;
+  const orderId = uploadJson.content.orderId;
 
   // 2. Poll for result
   const deadline = Date.now() + POLL_TIMEOUT_MS;
@@ -182,24 +227,28 @@ export async function transcribeIflytek(
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
     const { ts: ts2, signa: signa2 } = iflytekAuth(appId, secretKey);
-    const authQuery2 = `appId=${appId}&ts=${ts2}&signa=${encodeURIComponent(signa2)}`;
+    // orderId goes in query string (not body) for getResult
+    const queryParams = new URLSearchParams({ appId, ts: ts2, signa: signa2, orderId });
 
-    const queryResp = await fetch(`${LFASR_QUERY_URL}?${authQuery2}`, {
+    const queryResp = await fetch(`${LFASR_QUERY_URL}?${queryParams}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId }),
     });
     if (!queryResp.ok) continue;
 
     const queryJson = (await queryResp.json()) as {
       code: string;
-      data?: { taskStatus?: string; orderResult?: string };
+      content?: {
+        orderInfo?: { status?: number };
+        orderResult?: string;
+      };
     };
     if (queryJson.code !== "000000") continue;
 
-    const { taskStatus, orderResult } = queryJson.data ?? {};
-    // taskStatus: "4" = complete (some APIs use "2", check both)
-    if ((taskStatus === "4" || taskStatus === "2") && orderResult) {
+    const status = queryJson.content?.orderInfo?.status;
+    const orderResult = queryJson.content?.orderResult;
+    // status 4 = complete; status 3 = processing (do not break early)
+    if (status === 4 && orderResult) {
       return parseLfasrResult(orderResult);
     }
   }
@@ -260,7 +309,7 @@ export async function transcribeOpenai(
 
 const MOBILE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
-  "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"; // used by fetch fallback
 
 /**
  * Download media URL and convert to mp3.

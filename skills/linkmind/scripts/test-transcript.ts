@@ -52,24 +52,24 @@ function testFormatSrtTime(): void {
 function testParseLfasrResult(): void {
   console.log("\n[parseLfasrResult]");
 
-  // iFlytek LFASR orderResult format: JSON string with lattice array
-  // Time unit: 10ms (multiply × 10 to get ms)
+  // iFlytek LFASR v2 orderResult: lattice[].json_1best → { st: { rt: [{ ws: [...] }] } }
+  // Each ws: { wb, we (10ms units), cw: [{ w: text }] }
   const orderResult = JSON.stringify({
     lattice: [
       {
         json_1best: JSON.stringify({
-          rt: [{ w: [
-            { wb: 0,   we: 200,  w: "今天" },
-            { wb: 200, we: 532,  w: "我们来聊" },
-          ] }],
+          st: { rt: [{ ws: [
+            { wb: 0,   we: 200,  cw: [{ w: "今天" }] },
+            { wb: 200, we: 532,  cw: [{ w: "我们来聊" }] },
+          ] }] },
         }),
       },
       {
         json_1best: JSON.stringify({
-          rt: [{ w: [
-            { wb: 600,  we: 800,  w: "这个话题" },
-            { wb: 800,  we: 1084, w: "很有意思" },
-          ] }],
+          st: { rt: [{ ws: [
+            { wb: 600,  we: 800,  cw: [{ w: "这个话题" }] },
+            { wb: 800,  we: 1084, cw: [{ w: "很有意思" }] },
+          ] }] },
         }),
       },
     ],
