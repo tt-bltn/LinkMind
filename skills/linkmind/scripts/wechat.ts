@@ -56,16 +56,58 @@ export function extractHtmlVar(html: string, varName: string): string | null {
   return m[1] !== undefined ? m[1] : m[2] ?? null;
 }
 
-// Placeholder exports — implemented in later tasks
-export function stripWechatHtml(_html: string): string {
-  throw new Error("Not implemented");
+// ---------------------------------------------------------------------------
+// HTML content cleaning
+// ---------------------------------------------------------------------------
+
+export function stripWechatHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16)),
+    )
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
-export function extractContentImages(_html: string): string[] {
-  throw new Error("Not implemented");
+
+export function extractContentImages(html: string): string[] {
+  const results: string[] = [];
+  const imgRe = /<img\s[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(html)) !== null) {
+    const tag = m[0];
+    const dataSrc = tag.match(/data-src="([^"]+)"/)?.[1];
+    const src = tag.match(/\bsrc="([^"]+)"/)?.[1];
+    let url: string | null = null;
+    if (dataSrc && dataSrc.startsWith("http")) {
+      url = dataSrc;
+    } else if (src && src.startsWith("http")) {
+      url = src;
+    }
+    // Filter: only accept mmbiz CDN images
+    if (url && url.includes("mmbiz.qpic.cn")) {
+      results.push(url);
+    }
+  }
+  return results;
 }
-export function formatUnixTimestamp(_ts: string): string {
-  throw new Error("Not implemented");
+
+export function formatUnixTimestamp(ts: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const n = parseInt(ts, 10);
+  if (!n || isNaN(n)) return today;
+  const d = new Date(n * 1000);
+  if (isNaN(d.getTime())) return today;
+  return d.toISOString().slice(0, 10);
 }
+// parseWechatHtml — implemented in Task 5
 export function parseWechatHtml(_html: string, _originalUrl: string): WechatContent {
   throw new Error("Not implemented");
 }

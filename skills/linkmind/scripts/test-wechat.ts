@@ -104,7 +104,70 @@ var appmsgtoken = 'tok123';
   assertEqual(extractHtmlVar(html2, "msg_title"), "正确值", "精确匹配变量名");
 }
 
-// (其余测试函数将在后续 Task 中追加)
+// ---------------------------------------------------------------------------
+// Unit: stripWechatHtml
+// ---------------------------------------------------------------------------
+
+function testStripWechatHtml(): void {
+  console.log("\n[stripWechatHtml]");
+
+  assertEqual(stripWechatHtml("<p>你好世界</p>"), "你好世界", "去除 p 标签");
+  assertEqual(stripWechatHtml("第一行<br/>第二行"), "第一行\n第二行", "br 转换为换行");
+  assertEqual(
+    stripWechatHtml("<style>.foo { color: red; }</style>内容"),
+    "内容",
+    "去除 style 标签及内容",
+  );
+  assertEqual(
+    stripWechatHtml("<script>var x = 1;</script>内容"),
+    "内容",
+    "去除 script 标签及内容",
+  );
+  assertEqual(
+    stripWechatHtml("&lt;strong&gt;&amp;测试&lt;/strong&gt;"),
+    "<strong>&测试</strong>",
+    "解码 HTML 实体",
+  );
+  assertEqual(stripWechatHtml("  前后空格  "), "前后空格", "去除首尾空格");
+
+  const withTripleNewlines = stripWechatHtml("<p>段落一</p><p></p><p>段落二</p>");
+  assert(!withTripleNewlines.includes("\n\n\n"), "连续换行不超过两个");
+}
+
+// ---------------------------------------------------------------------------
+// Unit: extractContentImages
+// ---------------------------------------------------------------------------
+
+function testExtractContentImages(): void {
+  console.log("\n[extractContentImages]");
+
+  const html = `<div id="js_content">
+    <img data-src="https://mmbiz.qpic.cn/real1.jpg" src="about:blank"/>
+    <img src="https://mmbiz.qpic.cn/direct.jpg"/>
+    <img data-src="https://mmbiz.qpic.cn/real2.jpg" src="about:blank"/>
+    <img src="https://res.wx.qq.com/icon.png" data-src=""/>
+    <img data-src="data:image/gif;base64,R0lGO" src="about:blank"/>
+  </div>`;
+
+  const imgs = extractContentImages(html);
+  assertEqual(imgs.length, 3, "提取 3 张真实图片");
+  assertEqual(imgs[0], "https://mmbiz.qpic.cn/real1.jpg", "优先使用 data-src");
+  assertEqual(imgs[1], "https://mmbiz.qpic.cn/direct.jpg", "无 data-src 时使用 src");
+  assertEqual(imgs[2], "https://mmbiz.qpic.cn/real2.jpg", "第三张图正确");
+}
+
+// ---------------------------------------------------------------------------
+// Unit: formatUnixTimestamp
+// ---------------------------------------------------------------------------
+
+function testFormatUnixTimestamp(): void {
+  console.log("\n[formatUnixTimestamp]");
+
+  assertEqual(formatUnixTimestamp("1712345678"), "2024-04-05", "Unix 时间戳 → YYYY-MM-DD");
+  const today = new Date().toISOString().slice(0, 10);
+  assertEqual(formatUnixTimestamp("0"), today, "零值 → 今天");
+  assertEqual(formatUnixTimestamp("invalid"), today, "无效值 → 今天");
+}
 
 async function run(): Promise<void> {
   const runE2E = process.argv.includes("--e2e");
@@ -113,6 +176,9 @@ async function run(): Promise<void> {
 
   testExtractArticleUrl();
   testExtractHtmlVar();
+  testStripWechatHtml();
+  testExtractContentImages();
+  testFormatUnixTimestamp();
 
   if (runE2E) {
     console.log("\n[E2E] 将在 Task 8 中添加");
