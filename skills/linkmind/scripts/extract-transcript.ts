@@ -132,3 +132,77 @@ function iflytekAuth(
   const signa = createHmac("sha1", apiKey).update(md5).digest("base64");
   return { appId, ts, signa };
 }
+
+// ---------------------------------------------------------------------------
+// iFlytek LFASR transcription
+// ---------------------------------------------------------------------------
+
+const LFASR_UPLOAD_URL = "https://raasr.xfyun.cn/v2/api/upload";
+const LFASR_QUERY_URL  = "https://raasr.xfyun.cn/v2/api/getResult";
+const POLL_INTERVAL_MS = 3_000;
+const POLL_TIMEOUT_MS  = 10 * 60 * 1_000; // 10 minutes
+
+export async function transcribeIflytek(
+  mp3Path: string,
+  appId: string,
+  apiKey: string,
+): Promise<AsrResult> {
+  // 1. Upload
+  const { ts, signa } = iflytekAuth(appId, apiKey);
+  const authQuery = `appId=${appId}&ts=${ts}&signa=${encodeURIComponent(signa)}`;
+
+  const fileBuffer = readFileSync(mp3Path);
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([fileBuffer], { type: "audio/mp3" }),
+    "audio.mp3",
+  );
+
+  const uploadResp = await fetch(`${LFASR_UPLOAD_URL}?${authQuery}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!uploadResp.ok) {
+    throw new Error(`讯飞上传失败: HTTP ${uploadResp.status}`);
+  }
+  const uploadJson = (await uploadResp.json()) as {
+    code: string;
+    descInfo?: string;
+    data?: { taskId?: string };
+  };
+  if (uploadJson.code !== "000000" || !uploadJson.data?.taskId) {
+    throw new Error(`讯飞上传错误: ${uploadJson.descInfo ?? uploadJson.code}`);
+  }
+  const taskId = uploadJson.data.taskId;
+
+  // 2. Poll for result
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+
+    const { ts: ts2, signa: signa2 } = iflytekAuth(appId, apiKey);
+    const authQuery2 = `appId=${appId}&ts=${ts2}&signa=${encodeURIComponent(signa2)}`;
+
+    const queryResp = await fetch(`${LFASR_QUERY_URL}?${authQuery2}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId }),
+    });
+    if (!queryResp.ok) continue;
+
+    const queryJson = (await queryResp.json()) as {
+      code: string;
+      data?: { taskStatus?: string; orderResult?: string };
+    };
+    if (queryJson.code !== "000000") continue;
+
+    const { taskStatus, orderResult } = queryJson.data ?? {};
+    // taskStatus: "4" = complete (some APIs use "2", check both)
+    if ((taskStatus === "4" || taskStatus === "2") && orderResult) {
+      return parseLfasrResult(orderResult);
+    }
+  }
+
+  throw new Error("讯飞转写超时（超过 10 分钟），请稍后重试");
+}
