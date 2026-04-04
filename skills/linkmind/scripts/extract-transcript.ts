@@ -253,3 +253,75 @@ export async function transcribeOpenai(
 
   return { srt, fullText };
 }
+
+// ---------------------------------------------------------------------------
+// Media download
+// ---------------------------------------------------------------------------
+
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+
+/**
+ * Download media URL and convert to mp3.
+ * Strategy: yt-dlp first (handles all platforms), fetch+ffmpeg as fallback.
+ * Writes mp3 to `outputMp3Path`.
+ */
+export async function downloadMedia(
+  url: string,
+  referer: string,
+  outputMp3Path: string,
+): Promise<void> {
+  // yt-dlp: download and convert to mp3 directly
+  // The -o template uses %(ext)s so yt-dlp writes to outputMp3Path with .mp3 extension.
+  // We derive the template base by stripping .mp3 extension.
+  const templateBase = outputMp3Path.endsWith(".mp3")
+    ? outputMp3Path.slice(0, -4)
+    : outputMp3Path;
+
+  const ytdlp = spawnSync(
+    "yt-dlp",
+    [
+      "-x",
+      "--audio-format", "mp3",
+      "--audio-quality", "5",
+      "--referer", referer,
+      "--add-header", `User-Agent:${MOBILE_UA}`,
+      "-o", `${templateBase}.%(ext)s`,
+      "--no-playlist",
+      "--quiet",
+      url,
+    ],
+    { encoding: "utf-8", timeout: 5 * 60 * 1000 },
+  );
+
+  if (ytdlp.status === 0 && existsSync(outputMp3Path)) return;
+
+  // Fallback: fetch raw file, then extract audio with ffmpeg
+  const tmpVideoPath = `${templateBase}.mp4`;
+
+  const resp = await fetch(url, {
+    headers: { "User-Agent": MOBILE_UA, Referer: referer },
+  });
+  if (!resp.ok) {
+    throw Object.assign(
+      new Error(`媒体下载失败: HTTP ${resp.status} (yt-dlp 和 fetch 均失败)`),
+      { httpStatus: resp.status },
+    );
+  }
+
+  const buf = await resp.arrayBuffer();
+  writeFileSync(tmpVideoPath, Buffer.from(buf));
+
+  const ffmpeg = spawnSync(
+    "ffmpeg",
+    ["-i", tmpVideoPath, "-vn", "-ar", "16000", "-ac", "1", "-f", "mp3", "-y", outputMp3Path],
+    { encoding: "utf-8", timeout: 5 * 60 * 1000 },
+  );
+
+  try { unlinkSync(tmpVideoPath); } catch { /* ignore */ }
+
+  if (ffmpeg.status !== 0) {
+    throw new Error(`ffmpeg 音频提取失败: ${ffmpeg.stderr}`);
+  }
+}
