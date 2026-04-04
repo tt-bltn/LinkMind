@@ -288,7 +288,13 @@ in the 图片 section below.)
 
 > 📎 字幕文件：[transcript.srt](attachments/{date}-{slug}/transcript.srt)
 
-{fullText from extract-transcript.ts output, as-is}
+(Read the SRT file from the attachments directory and render its content verbatim
+inside a fenced code block with language tag `srt`, preserving all sequence numbers,
+timestamps, and text lines exactly as they appear in the file:)
+
+```srt
+{full contents of transcript.srt, verbatim}
+```
 
 (If Step 2.7 was skipped because videoUrl is null, omit this section entirely.
 If Step 2.7 was skipped because ASR is not configured, add a note:
