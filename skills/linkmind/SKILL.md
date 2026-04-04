@@ -225,6 +225,12 @@ has_transcript: {true/false}
 has_image_analysis: {true/false}
 ---
 
+(For WeChat articles only, also add these frontmatter fields:)
+---
+account_name: '{accountName}'
+digest: '{digest}'
+---
+
 # {title}
 
 > 来源：{platform display name} @{author} | {date}
@@ -273,7 +279,18 @@ If an individual image's analysis failed, use:
 
 ## 元信息
 
+(For Weibo — use reposts/comments/likes stats:)
 - 转发: {stats.reposts} | 评论: {stats.comments} | 点赞: {stats.likes}
+
+(For Xiaohongshu — use likes/collects/comments stats:)
+- 点赞: {stats.likes} | 收藏: {stats.collects} | 评论: {stats.comments}
+
+(For WeChat — use readCount/likeCount/inLookCount; show '—' for null values:)
+- 阅读: {readCount ?? '—'} | 点赞: {likeCount ?? '—'} | 在看: {inLookCount ?? '—'}
+- 公众号: {accountName}
+- 摘要: {digest}
+
+(Omit stats lines that are null for all fields.)
 ```
 
 ### File naming

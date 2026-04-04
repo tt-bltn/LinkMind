@@ -113,6 +113,38 @@ export function formatUnixTimestamp(ts: string): string {
 // Helper functions for parseWechatHtml
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract the inner HTML of #js_content by tracking div nesting depth.
+ * A lazy regex like ([\s\S]*?)<\/div> would stop at the FIRST </div>,
+ * silently truncating any article body that contains nested divs.
+ */
+function extractJsContent(html: string): string {
+  const openRe = /<div[^>]+id="js_content"[^>]*>/i;
+  const openMatch = html.match(openRe);
+  if (!openMatch || openMatch.index === undefined) return "";
+
+  const contentStart = openMatch.index + openMatch[0].length;
+  let depth = 1;
+  let i = contentStart;
+
+  while (i < html.length && depth > 0) {
+    if (html[i] !== "<") { i++; continue; }
+    if (/^<\/div>/i.test(html.slice(i, i + 6))) {
+      depth--;
+      if (depth === 0) return html.slice(contentStart, i);
+      i += 6;
+    } else if (/^<div[\s>/]/i.test(html.slice(i, i + 5))) {
+      depth++;
+      i++;
+    } else {
+      i++;
+    }
+  }
+
+  // Ran out of HTML without finding the closing tag — return what we have
+  return html.slice(contentStart);
+}
+
 function makeTitle(text: string): string {
   const firstLine = text.split("\n")[0];
   if (firstLine.length <= 30) return firstLine;
@@ -140,9 +172,8 @@ export function parseWechatHtml(html: string, originalUrl: string): WechatConten
   const coverImage = coverVar || extractOgMeta(html, "og:image") || null;
   const digest = extractHtmlVar(html, "desc") ?? extractOgMeta(html, "og:description") ?? "";
 
-  // Extract #js_content
-  const contentMatch = html.match(/<div[^>]+id="js_content"[^>]*>([\s\S]*?)<\/div>/i);
-  const contentHtml = contentMatch ? contentMatch[1] : "";
+  // Extract #js_content using depth-tracking (not lazy regex — see extractJsContent)
+  const contentHtml = extractJsContent(html);
   const text = stripWechatHtml(contentHtml);
   const images = extractContentImages(contentHtml);
   const videoUrl = extractVideoUrl(contentHtml);
@@ -369,6 +400,10 @@ async function fetchViaCdp(url: string, cookie?: string): Promise<WechatContent>
 
     const text = stripWechatHtml(raw.descHtml);
     const title = raw.msg_title || makeTitle(text);
+    const WECHAT_UI_DOMAINS = ["res.wx.qq.com"];
+    const images = raw.images.filter(
+      (url) => !WECHAT_UI_DOMAINS.some((d) => url.includes(d)),
+    );
 
     return {
       platform: "wechat",
@@ -379,8 +414,8 @@ async function fetchViaCdp(url: string, cookie?: string): Promise<WechatContent>
       digest: raw.desc || "",
       coverImage: raw.cover || null,
       text,
-      images: raw.images,
-      videoUrl: null,
+      images,
+      videoUrl: extractVideoUrl(raw.descHtml),
       readCount: null,
       likeCount: null,
       inLookCount: null,

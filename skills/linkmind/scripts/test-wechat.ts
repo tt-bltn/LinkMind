@@ -221,6 +221,45 @@ var desc = "这是文章摘要";
 }
 
 // ---------------------------------------------------------------------------
+// Unit: parseWechatHtml with deeply nested divs (regression for lazy-regex bug)
+// ---------------------------------------------------------------------------
+
+function testParseWechatHtmlNestedDivs(): void {
+  console.log("\n[parseWechatHtml — nested divs]");
+
+  // WeChat articles commonly wrap content in deeply nested sections/divs.
+  // The lazy regex `([\s\S]*?)<\/div>` would stop at the first </div>,
+  // losing everything after it. Verify all paragraphs are captured.
+  const html = `<html>
+<script>
+var msg_title = "嵌套测试";
+var nickname = "测试号";
+var ct = "1712345678";
+var cover = "";
+var desc = "";
+</script>
+<div id="js_content">
+  <section>
+    <div class="outer">
+      <div class="inner">
+        <p>第一段内容</p>
+      </div>
+      <div class="inner">
+        <p>第二段内容</p>
+      </div>
+    </div>
+  </section>
+  <p>第三段在顶层</p>
+</div>
+</html>`;
+
+  const result = parseWechatHtml(html, "https://mp.weixin.qq.com/s/test");
+  assert(result.text.includes("第一段内容"), "嵌套 div 中第一段被提取");
+  assert(result.text.includes("第二段内容"), "嵌套 div 中第二段被提取");
+  assert(result.text.includes("第三段在顶层"), "js_content 顶层第三段被提取");
+}
+
+// ---------------------------------------------------------------------------
 // E2E: Full handler pipeline
 // ---------------------------------------------------------------------------
 
@@ -289,6 +328,7 @@ async function run(): Promise<void> {
   testExtractContentImages();
   testFormatUnixTimestamp();
   testParseWechatHtml();
+  testParseWechatHtmlNestedDivs();
 
   if (runE2E) {
     await testE2E();
