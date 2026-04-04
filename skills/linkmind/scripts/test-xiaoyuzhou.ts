@@ -5,7 +5,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { parseEpisodeUrl } from "./xiaoyuzhou.js";
+import { parseEpisodeUrl, parseSubtitleEntries, filterByTimeWindow, formatSubtitleSegment } from "./xiaoyuzhou.js";
 
 const exec = promisify(execFile);
 
@@ -68,6 +68,76 @@ function testParseEpisodeUrl(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Unit: parseSubtitleEntries
+// ---------------------------------------------------------------------------
+
+function testParseSubtitleEntries(): void {
+  console.log("\n[parseSubtitleEntries]");
+
+  // SRT format
+  const srt = `1
+00:00:05,000 --> 00:00:08,000
+大家好，欢迎收听本期节目。
+
+2
+00:01:03,000 --> 00:01:10,500
+今天我们来聊聊人工智能的未来。
+
+3
+00:02:30,000 --> 00:02:45,000
+这是第三句话。
+`;
+
+  const entries = parseSubtitleEntries(srt);
+  assertEqual(entries.length, 3, "解析出 3 条字幕");
+  assertEqual(entries[0].startSeconds, 5, "第一条 startSeconds=5");
+  assertEqual(entries[0].endSeconds, 8, "第一条 endSeconds=8");
+  assertEqual(entries[0].text, "大家好，欢迎收听本期节目。", "第一条文本正确");
+  assertEqual(entries[1].startSeconds, 63, "第二条 startSeconds=63（1分3秒）");
+  assertEqual(entries[2].startSeconds, 150, "第三条 startSeconds=150（2分30秒）");
+
+  // Empty input
+  const empty = parseSubtitleEntries("");
+  assertEqual(empty.length, 0, "空字符串解析为空数组");
+}
+
+function testFilterByTimeWindow(): void {
+  console.log("\n[filterByTimeWindow]");
+
+  const entries = [
+    { startSeconds: 10, endSeconds: 15, text: "A" },
+    { startSeconds: 60, endSeconds: 65, text: "B" },
+    { startSeconds: 120, endSeconds: 130, text: "C" },
+    { startSeconds: 200, endSeconds: 210, text: "D" },
+  ];
+
+  // Window [55s, 135s]: should include B (60-65) and C (120-130)
+  const filtered = filterByTimeWindow(entries, 55, 135);
+  assertEqual(filtered.length, 2, "窗口 [55s,135s] 含 2 条");
+  assertEqual(filtered[0].text, "B", "第一条为 B");
+  assertEqual(filtered[1].text, "C", "第二条为 C");
+
+  // null window = all entries
+  const all = filterByTimeWindow(entries, null, null);
+  assertEqual(all.length, 4, "null 窗口返回全部");
+}
+
+function testFormatSubtitleSegment(): void {
+  console.log("\n[formatSubtitleSegment]");
+
+  const entries = [
+    { startSeconds: 63, endSeconds: 70, text: "今天我们聊聊 AI。" },
+    { startSeconds: 150, endSeconds: 160, text: "这是很重要的一点。" },
+  ];
+
+  const result = formatSubtitleSegment(entries);
+  assert(result.includes("[01:03]"), "包含 [01:03] 时间戳");
+  assert(result.includes("[02:30]"), "包含 [02:30] 时间戳");
+  assert(result.includes("今天我们聊聊 AI。"), "包含第一条文本");
+  assert(result.includes("这是很重要的一点。"), "包含第二条文本");
+}
+
+// ---------------------------------------------------------------------------
 // E2E: Full handler pipeline
 // ---------------------------------------------------------------------------
 
@@ -125,6 +195,9 @@ async function run(): Promise<void> {
   console.log("=== Xiaoyuzhou Handler Tests ===");
 
   testParseEpisodeUrl();
+  testParseSubtitleEntries();
+  testFilterByTimeWindow();
+  testFormatSubtitleSegment();
 
   if (runE2E) {
     await testE2E();

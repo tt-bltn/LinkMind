@@ -183,3 +183,97 @@ export async function fetchEpisodeData(
     fetchedAt: new Date().toISOString(),
   } as XiaoyuzhouContent;
 }
+
+// ---------------------------------------------------------------------------
+// Subtitle utilities
+// ---------------------------------------------------------------------------
+
+export interface SubtitleEntry {
+  startSeconds: number;
+  endSeconds: number;
+  text: string;
+}
+
+/**
+ * Parse SRT subtitle content into structured entries.
+ * Handles both SRT (HH:MM:SS,mmm --> HH:MM:SS,mmm) and
+ * WebVTT (HH:MM:SS.mmm --> HH:MM:SS.mmm) timestamp formats.
+ */
+export function parseSubtitleEntries(content: string): SubtitleEntry[] {
+  if (!content.trim()) return [];
+
+  const entries: SubtitleEntry[] = [];
+  const blocks = content.trim().split(/\n\n+/);
+
+  for (const block of blocks) {
+    const lines = block.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) continue;
+
+    const tsLine = lines.find((l) => l.includes("-->"));
+    if (!tsLine) continue;
+
+    const tsMatch = tsLine.match(
+      /(\d{1,2}):(\d{2}):(\d{2})[,.](\d+)\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d+)/,
+    );
+    if (!tsMatch) continue;
+
+    const toSeconds = (h: string, m: string, s: string) =>
+      parseInt(h, 10) * 3600 + parseInt(m, 10) * 60 + parseInt(s, 10);
+
+    const startSeconds = toSeconds(tsMatch[1], tsMatch[2], tsMatch[3]);
+    const endSeconds = toSeconds(tsMatch[5], tsMatch[6], tsMatch[7]);
+
+    const textLines = lines.filter(
+      (l) => l !== tsLine && !/^\d+$/.test(l) && !l.startsWith("WEBVTT"),
+    );
+    const text = textLines.join(" ").trim();
+
+    if (text) entries.push({ startSeconds, endSeconds, text });
+  }
+
+  return entries;
+}
+
+/**
+ * Filter subtitle entries to those overlapping [startSec, endSec].
+ * Pass null for both to return all entries.
+ */
+export function filterByTimeWindow(
+  entries: SubtitleEntry[],
+  startSec: number | null,
+  endSec: number | null,
+): SubtitleEntry[] {
+  if (startSec === null && endSec === null) return entries;
+  return entries.filter(
+    (e) =>
+      (startSec === null || e.endSeconds >= startSec) &&
+      (endSec === null || e.startSeconds <= endSec),
+  );
+}
+
+/**
+ * Format subtitle entries as "[MM:SS] text" lines for Obsidian note.
+ */
+export function formatSubtitleSegment(entries: SubtitleEntry[]): string {
+  return entries
+    .map((e) => {
+      const m = Math.floor(e.startSeconds / 60).toString().padStart(2, "0");
+      const s = (e.startSeconds % 60).toString().padStart(2, "0");
+      return `[${m}:${s}] ${e.text}`;
+    })
+    .join("\n");
+}
+
+/**
+ * Download subtitle file and parse into entries.
+ */
+export async function downloadSubtitle(subtitleUrl: string): Promise<SubtitleEntry[]> {
+  const resp = await fetch(subtitleUrl, {
+    headers: { "User-Agent": APP_UA },
+  });
+  if (!resp.ok) {
+    throw new Error(`字幕下载失败: HTTP ${resp.status}`);
+  }
+  const content = await resp.text();
+  return parseSubtitleEntries(content);
+}
