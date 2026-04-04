@@ -304,6 +304,35 @@ export async function transcribeOpenai(
 }
 
 // ---------------------------------------------------------------------------
+// Time argument parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a time argument string to seconds.
+ * Accepts: "MM:SS", "HH:MM:SS", or plain seconds (e.g. "1023").
+ * Returns null if value is undefined or cannot be parsed.
+ */
+export function parseTimeArg(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === "") return null;
+  const parts = value.trim().split(":");
+  if (parts.length === 1) {
+    const n = Number(parts[0]);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  if (parts.length === 2) {
+    const [mm, ss] = parts.map(Number);
+    if (!Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+    return mm * 60 + ss;
+  }
+  if (parts.length === 3) {
+    const [hh, mm, ss] = parts.map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+    return hh * 3600 + mm * 60 + ss;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Media download
 // ---------------------------------------------------------------------------
 
@@ -315,11 +344,14 @@ const MOBILE_UA =
  * Download media URL and convert to mp3.
  * Strategy: yt-dlp first (handles all platforms), fetch+ffmpeg as fallback.
  * Writes mp3 to `outputMp3Path`.
+ * Optional startSeconds/endSeconds limit extraction to that time window.
  */
 export async function downloadMedia(
   url: string,
   referer: string,
   outputMp3Path: string,
+  startSeconds?: number,
+  endSeconds?: number,
 ): Promise<void> {
   // yt-dlp: download and convert to mp3 directly
   // The -o template uses %(ext)s so yt-dlp writes to outputMp3Path with .mp3 extension.
@@ -328,19 +360,28 @@ export async function downloadMedia(
     ? outputMp3Path.slice(0, -4)
     : outputMp3Path;
 
-  const ytdlp = spawnSync(
-    "yt-dlp",
-    [
-      "-x",
-      "--audio-format", "mp3",
-      "--audio-quality", "5",
-      "-o", `${templateBase}.%(ext)s`,
-      "--no-playlist",
-      "--quiet",
-      url,
-    ],
-    { encoding: "utf-8", timeout: 5 * 60 * 1000 },
-  );
+  const ytdlpArgs: string[] = [
+    "-x",
+    "--audio-format", "mp3",
+    "--audio-quality", "5",
+    "-o", `${templateBase}.%(ext)s`,
+    "--no-playlist",
+    "--quiet",
+  ];
+
+  if (startSeconds !== undefined || endSeconds !== undefined) {
+    const start = startSeconds ?? 0;
+    const end = endSeconds !== undefined ? endSeconds : undefined;
+    const section = end !== undefined ? `*${start}-${end}` : `*${start}-`;
+    ytdlpArgs.push("--download-sections", section);
+  }
+
+  ytdlpArgs.push(url);
+
+  const ytdlp = spawnSync("yt-dlp", ytdlpArgs, {
+    encoding: "utf-8",
+    timeout: 5 * 60 * 1000,
+  });
 
   if (ytdlp.status === 0 && existsSync(outputMp3Path)) return;
 
@@ -360,11 +401,15 @@ export async function downloadMedia(
   const buf = await resp.arrayBuffer();
   writeFileSync(tmpVideoPath, Buffer.from(buf));
 
-  const ffmpeg = spawnSync(
-    "ffmpeg",
-    ["-i", tmpVideoPath, "-vn", "-ar", "16000", "-ac", "1", "-f", "mp3", "-y", outputMp3Path],
-    { encoding: "utf-8", timeout: 5 * 60 * 1000 },
-  );
+  const ffmpegArgs: string[] = ["-i", tmpVideoPath];
+  if (startSeconds !== undefined) ffmpegArgs.push("-ss", String(startSeconds));
+  if (endSeconds !== undefined) ffmpegArgs.push("-to", String(endSeconds));
+  ffmpegArgs.push("-vn", "-ar", "16000", "-ac", "1", "-f", "mp3", "-y", outputMp3Path);
+
+  const ffmpeg = spawnSync("ffmpeg", ffmpegArgs, {
+    encoding: "utf-8",
+    timeout: 5 * 60 * 1000,
+  });
 
   try { unlinkSync(tmpVideoPath); } catch { /* ignore */ }
 
@@ -458,6 +503,8 @@ async function main(): Promise<void> {
   const outputDir = getArg("--output-dir");
   const configPath = getArg("--config") ?? parseConfigArg(process.argv);
   const referer   = getArg("--referer") ?? "https://weibo.com";
+  const startSeconds = parseTimeArg(getArg("--start"));
+  const endSeconds   = parseTimeArg(getArg("--end"));
 
   if (!mediaUrl || !outputDir || !configPath) {
     const err: HandlerError = {
@@ -485,7 +532,11 @@ async function main(): Promise<void> {
     }
 
     // Download media → mp3
-    await downloadMedia(mediaUrl, referer, tmpMp3);
+    await downloadMedia(
+      mediaUrl, referer, tmpMp3,
+      startSeconds ?? undefined,
+      endSeconds ?? undefined,
+    );
 
     // Transcribe
     const asrResult = await routeAsr(tmpMp3, config);
