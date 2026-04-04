@@ -194,7 +194,7 @@ ASR credentials in `.env`, extract the audio and transcribe it.
 
 ```bash
 npx tsx skills/linkmind/scripts/extract-transcript.ts \
-  --video-url "<VIDEO_URL>" \
+  --media-url "<MEDIA_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
   --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
@@ -217,6 +217,10 @@ npx tsx skills/linkmind/scripts/extract-transcript.ts \
 - `videoUrl` is `null` → no video to transcribe
 - `.env` has no ASR variables configured → ASR not configured;
   inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 .env 中配置。参考 .env.example。"
+
+**Multilingual transcripts:** If `fullText` is in a non-Chinese language, translate
+and present the key points in Chinese when writing the deep summary. The SRT file
+itself is kept in the original language.
 
 ## Step 3: Generate the Markdown file
 
