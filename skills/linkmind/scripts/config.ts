@@ -15,6 +15,7 @@ export interface AsrConfig {
   openai?: {
     api_key?: string;
     base_url?: string;
+    model?: string;
   };
 }
 
@@ -106,6 +107,8 @@ function applyEnvOverrides(config: LinkMindConfig): LinkMindConfig {
     envString("LINKMIND_OPENAI_API_KEY") ?? config.asr.openai.api_key;
   config.asr.openai.base_url =
     envString("LINKMIND_OPENAI_BASE_URL") ?? config.asr.openai.base_url;
+  config.asr.openai.model =
+    envString("LINKMIND_OPENAI_MODEL") ?? config.asr.openai.model;
 
   return config;
 }
