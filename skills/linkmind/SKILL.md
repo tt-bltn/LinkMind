@@ -242,7 +242,59 @@ Final text paragraph.
 - `images` array is empty → no images to analyze
 - All images failed to download in Step 2.5 → no local files to read
 
+## Step 2.C: 小宇宙音频 ASR 降级（仅限小宇宙平台）
+
+**仅在以下所有条件同时成立时执行：**
+- `platform == xiaoyuzhou`
+- `subtitleAvailable == false`（Step 2.A 字幕不可用）
+- `audioUrl` 不为 null
+- `.env` 中已配置 ASR 服务（讯飞或 OpenAI）
+
+若条件不满足（ASR 未配置），跳过此步骤，在 Step 3 中提示：
+"⚠️ 平台字幕不可用，ASR 服务未配置，无法转写音频。请在 .env 中配置 ASR 凭据。"
+
+**执行步骤：**
+
+1. 确定时间参数（用于只转写用户关心的片段，避免对整集做 ASR）：
+   - 若 `timestampSeconds` 不为 null：
+     - `startSeconds = max(0, timestampSeconds - 120)`
+     - `endSeconds = timestampSeconds + 120`
+   - 若 `timestampSeconds` 为 null：不传时间参数（转写全集）
+
+2. 确保 attachments 目录存在（同 Step 2.5）。
+
+3. 运行音频转写脚本：
+
+**有时间窗口时（timestampSeconds 不为 null）：**
+```bash
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
+  --media-url "<audioUrl>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "https://www.xiaoyuzhoufm.com" \
+  --start "{startSeconds}" \
+  --end "{endSeconds}"
+```
+
+**转写全集时（timestampSeconds 为 null）：**
+```bash
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
+  --media-url "<audioUrl>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "https://www.xiaoyuzhoufm.com"
+```
+
+4. 脚本输出 JSON：
+   ```json
+   { "srtPath": "transcript.srt", "fullText": "转写纯文本..." }
+   ```
+   - 成功后：标记 `asrAvailable = true`，将 `fullText` 存入 `subtitleText`，用于深度摘要
+   - 失败后（含 `"error"` 字段）：标记 `asrAvailable = false`，**不中止流程**，在 Step 3 中报告错误
+
 ## Step 2.7: Extract video transcript (if applicable)
+
+**此步骤适用于微博、小红书等有 `videoUrl` 的平台。小宇宙平台请使用 Step 2.C。**
 
 If the JSON contains a non-null `videoUrl` field **and** the user has configured
 ASR credentials in `.env`, extract the audio and transcribe it.
@@ -406,7 +458,11 @@ embedded inline in the 原文内容 section above.)
 
 ## 字幕摘录
 
-(仅限小宇宙平台，且 `subtitleAvailable = true` 时包含此区块。)
+(仅限小宇宙平台，且 `subtitleAvailable = true` 或 `asrAvailable = true` 时包含此区块。)
+
+(来源标注：)
+- 若字幕来自平台字幕文件：`> 📝 来源：平台字幕`
+- 若字幕来自 ASR 音频转写：`> 🎙️ 来源：ASR 音频转写`
 
 (若 `timestampSeconds` 不为 null，标注摘录范围：)
 > 📍 以下内容为打点时间 `{MM:SS}` 前后 2 分钟的字幕（共 {filteredEntries.length} 条）
@@ -416,8 +472,8 @@ embedded inline in the 原文内容 section above.)
 
 (若 `summaryScope = "full"`，省略范围提示，直接输出全部字幕文本。)
 
-(若 `subtitleAvailable = false`，输出：)
-> ⚠️ 该剧集平台字幕不可用。
+(若 `subtitleAvailable = false` 且 `asrAvailable = false`，输出：)
+> ⚠️ 该剧集平台字幕不可用，ASR 转写也未成功。
 
 ## 节目简介
 
