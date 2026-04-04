@@ -311,11 +311,10 @@ function categorizeError(e: unknown): { code: ErrorCode; details: string } {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const rawUrl = args[0];
-  const configPath = parseConfigArg(process.argv);
 
-  if (!rawUrl || !configPath) {
+  if (!rawUrl) {
     const err: HandlerError = {
-      error: "用法: npx tsx xiaoyuzhou.ts <url> --config <path>",
+      error: "用法: npx tsx xiaoyuzhou.ts <url> [--config <path>]",
     };
     console.log(JSON.stringify(err));
     process.exit(1);
@@ -323,8 +322,8 @@ async function main(): Promise<void> {
 
   try {
     // Load config (for x-jike-access-token)
-    const config = loadConfig(configPath);
-    const token = config.cookies?.xiaoyuzhou;
+    const configPath = parseConfigArg(process.argv);
+    const token = configPath ? loadConfig(configPath).cookies?.xiaoyuzhou : undefined;
 
     // Resolve short link if needed
     const finalUrl = rawUrl.includes("xyzfm.link")
