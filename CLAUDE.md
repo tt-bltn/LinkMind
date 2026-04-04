@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**LinkMind** 是一个 AI Agent Skill，自动捕获微博、小红书等社交媒体内容并转换为结构化 Markdown 笔记，保存到用户的 Obsidian 知识库。
+**LinkMind** 是一个 AI Agent Skill，自动捕获微博、小红书、微信公众号等社交媒体内容并转换为结构化 Markdown 笔记，保存到用户的 Obsidian 知识库。
 
 核心功能：
 - 微博：通过 `m.weibo.cn` JSON API 提取（无需 JavaScript 渲染）
 - 小红书：通过自定义 Chrome DevTools Protocol 客户端提取（使用系统 Chrome）
+- 微信公众号：HTTP fetch 直取，Chrome CDP 作为 fallback
 - AI 深度摘要、图片多模态分析、视频 ASR 转录
 - 笔记以统一格式保存到 Obsidian vault
 
@@ -32,14 +33,17 @@ npm run setup -- --vault /path/to/vault
 # 运行平台处理器（输出 JSON 到 stdout）
 npm run weibo "<url>"
 npm run xiaohongshu "<url>"
+npm run wechat "<url>"
 
 # 测试（单元测试）
 npm run test:weibo
 npm run test:xhs
+npm run test:wechat
 
 # 测试（端到端，调用真实 URL）
 npm run test:weibo -- --e2e
 npm run test:xhs -- --e2e
+npm run test:wechat -- --e2e
 ```
 
 根目录发布命令：
@@ -57,7 +61,7 @@ npm run clawhub:sync      # 同步到 ClawHub
     ↓
 [SKILL.md 工作流指令]
     ├→ Step 0: 读取 config.json，验证 vault 路径
-    ├→ Step 1: 识别平台 (weibo / xiaohongshu)
+    ├→ Step 1: 识别平台 (weibo / xiaohongshu / wechat)
     ├→ Step 2: 调用处理器脚本，获取 JSON 结构化数据
     ├→ Step 2.5: 下载图片到 vault attachments 目录
     ├→ Step 2.6: AI 多模态图片分析（OCR + 视觉内容）
@@ -68,7 +72,7 @@ npm run clawhub:sync      # 同步到 ClawHub
 
 **职责分工：**
 - `SKILL.md`：AI 驱动的编排，深度摘要生成，文件 I/O，错误处理
-- `weibo.ts` / `xiaohongshu.ts`：平台特定的数据提取，输出 JSON 到 stdout
+- `weibo.ts` / `xiaohongshu.ts` / `wechat.ts`：平台特定的数据提取，输出 JSON 到 stdout
 - `chrome-cdp.ts`：自定义 Chrome DevTools Protocol 客户端（替代 Playwright，节省约 200MB）
 - `config.ts`：配置加载（config.json + .env，优先级分层）
 - `retry.ts`：指数退避重试逻辑

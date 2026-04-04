@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-04-04
+
+### Added
+
+- WeChat Official Account article capture via Chrome DevTools Protocol with HTTP fetch fallback (`skills/linkmind/scripts/wechat.ts`)
+- `WechatContent` type with `accountName`, `digest`, `coverImage`, `readCount`, `likeCount`, `inLookCount` fields
+- WeChat article stats (read count, like count, "in look" count) with optional cookie support
+- WeChat unit and E2E tests (`test-wechat.ts`; run `npm run test:wechat` / `npm run test:wechat:e2e`)
+- `npm run wechat "<url>"` script for standalone testing
+- SKILL.md updated to recognise `mp.weixin.qq.com` URLs and dispatch to `wechat.ts`
+
 ## [0.1.1] - 2026-03-22
 
 ### Added

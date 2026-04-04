@@ -14,8 +14,10 @@ flowchart LR
     Skill --> Dispatch{"识别平台"}
     Dispatch -->|weibo.com| WeiboHandler["weibo.ts"]
     Dispatch -->|xiaohongshu.com| XhsHandler["xiaohongshu.ts"]
+    Dispatch -->|mp.weixin.qq.com| WechatHandler["wechat.ts"]
     WeiboHandler --> JSON["结构化 JSON"]
     XhsHandler --> JSON
+    WechatHandler --> JSON
     JSON --> ImgDL["download-images.ts<br/>图片下载到 Vault"]
     ImgDL --> ImgAnalyze["AI 多模态分析<br/>读取图片 → 提取内容"]
     ImgAnalyze --> HasVideo{"含视频?<br/>且 ASR 已配置?"}
@@ -66,7 +68,8 @@ flowchart TD
 | handler          | 抓取方式                        | 依赖               |
 | ---------------- | --------------------------- | ---------------- |
 | `weibo.ts`       | `m.weibo.cn` 移动端 JSON API   | Node.js 内置 fetch |
-| `xiaohongshu.ts` | Playwright headless browser | playwright       |
+| `xiaohongshu.ts` | Chrome DevTools Protocol    | chrome-cdp.ts    |
+| `wechat.ts`      | HTTP fetch + Chrome CDP fallback | Node.js 内置 fetch + chrome-cdp.ts |
 
 
 ### 2.3 视频转写脚本 — extract-transcript.ts
@@ -189,8 +192,19 @@ classDiagram
         +object stats
     }
 
+    class WechatContent {
+        +string platform
+        +string accountName
+        +string digest
+        +string|null coverImage
+        +number|null readCount
+        +number|null likeCount
+        +number|null inLookCount
+    }
+
     CapturedContent <|-- WeiboContent
     CapturedContent <|-- XiaohongshuContent
+    CapturedContent <|-- WechatContent
 ```
 
 
@@ -204,7 +218,8 @@ classDiagram
 | 语言           | TypeScript                  | 类型安全、Node.js 生态丰富              |
 | TS 运行器       | tsx                         | 零配置、快速、无需编译步骤                  |
 | 微博抓取         | m.weibo.cn 移动端 API          | 无需登录、返回 JSON、轻量                |
-| 小红书抓取        | Playwright                  | 反爬严格需要浏览器渲染                    |
+| 小红书抓取        | Chrome DevTools Protocol    | 反爬严格需要浏览器渲染，复用系统 Chrome        |
+| 微信抓取         | HTTP fetch + Chrome CDP fallback | 文章直接可 fetch；CDP 作为反爬备选路径  |
 | 音频提取         | ffmpeg-static (npm)         | 静态二进制，npm install 自动安装，无需系统级依赖 |
 | ASR — 科大讯飞   | 语音转写 (LFASR)                | 中文识别质量高，支持长音频，带时间戳             |
 | ASR — OpenAI | Whisper API                 | 多语言支持好，API 简洁，作为备选             |
@@ -268,15 +283,18 @@ sequenceDiagram
 LinkMind/
 ├── skills/linkmind/
 │   ├── SKILL.md              # AI 读取的工作流指令
-│   ├── config.json           # 用户配置（Vault 路径、Cookie、ASR 等）
-│   ├── handlers/
+│   ├── config.json           # 用户配置（Vault 路径）
+│   ├── .env                  # 凭据（Cookie、ASR 密钥，不进 git）
+│   ├── scripts/
 │   │   ├── package.json      # handler 依赖（含 ffmpeg-static）
 │   │   ├── tsconfig.json     # TypeScript 配置
 │   │   ├── types.ts          # 共享类型定义
 │   │   ├── config.ts         # 统一配置读取
 │   │   ├── retry.ts          # 重试逻辑
+│   │   ├── chrome-cdp.ts     # Chrome DevTools Protocol 客户端
 │   │   ├── weibo.ts          # 微博 handler
 │   │   ├── xiaohongshu.ts    # 小红书 handler
+│   │   ├── wechat.ts         # 微信公众号 handler
 │   │   ├── download-images.ts # 图片下载
 │   │   └── extract-transcript.ts  # 视频转写（音频提取 + ASR + SRT 生成）
 │   └── templates/
@@ -300,7 +318,7 @@ LinkMind/
 
 ### 新增平台
 
-1. 在 `handlers/` 下新建 `{platform}.ts`
+1. 在 `scripts/` 下新建 `{platform}.ts`
 2. 实现 URL 解析 + 内容抓取 + 输出 `CapturedContent` JSON
 3. 在 `SKILL.md` 中添加平台 URL 模式和调用指令
 4. 在 `types.ts` 中新增平台子类型（如需要）

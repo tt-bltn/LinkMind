@@ -1,8 +1,8 @@
 # LinkMind — 项目状态 (PROJECT_STATE)
 
-> 最后更新：2026-03-22
+> 最后更新：2026-04-04
 
-## 当前阶段：Step 7 — 分发与安装 ✅
+## 当前阶段：Step 8 — 微信公众号支持 ✅
 
 ## 阶段总览
 
@@ -15,6 +15,7 @@
 | Step 5 | 图片多模态 — AI 视觉分析图片、提取内容用于总结 | ✅ 已完成 |
 | Step 6 | 视频 ASR — 音频提取、语音转文字 (讯飞/Whisper)、SRT 生成 | 🔧 进行中 |
 | Step 7 | 分发与安装 — OpenClaw/ClawHub/Claude Code 多渠道分发、Chrome CDP 替代 Playwright | ✅ 已完成 |
+| Step 8 | 微信公众号 — 实现 wechat.ts，HTTP fetch + Chrome CDP 双路径抓取 | ✅ 已完成 |
 
 ---
 
@@ -164,6 +165,27 @@
 
 ---
 
+## Step 8：微信公众号支持 ✅
+
+**目标：** 实现微信公众号文章抓取，支持 HTTP 直取和 Chrome CDP 双路径，提取正文、图片、阅读/点赞/在看数据。
+
+| 任务 | 状态 |
+|------|------|
+| 实现 `wechat.ts` handler | ✅ |
+| HTTP fetch 路径（直接请求 mp.weixin.qq.com） | ✅ |
+| Chrome CDP fallback（应对反爬限制） | ✅ |
+| URL 校验（支持 `/s/<id>` 短路径和 `/s?__biz=...` 长路径） | ✅ |
+| HTML 变量提取（`var msg_title`, `var ct` 等）| ✅ |
+| 正文清洗（HTML → 纯文本）| ✅ |
+| 文章图片提取（`data-src` / `src`，过滤 UI 资源域名）| ✅ |
+| 统计数据提取（阅读数、点赞数、在看数，可选 cookie）| ✅ |
+| `WechatContent` 类型定义（含 `accountName`、`digest`、`coverImage` 等）| ✅ |
+| SKILL.md 添加 `mp.weixin.qq.com` 平台识别和 `wechat.ts` 调用指令 | ✅ |
+| 单元测试（`test-wechat.ts`）| ✅ |
+| E2E 测试支持（`npm run test:wechat:e2e`）| ✅ |
+
+---
+
 ## 技术栈
 
 - **语言：** TypeScript (ES2022, ESM)
@@ -171,6 +193,7 @@
 - **Node.js：** >= 22
 - **微博抓取：** Node.js 内置 fetch + m.weibo.cn API
 - **小红书抓取：** Chrome DevTools Protocol (CDP)，复用系统 Chrome
+- **微信抓取：** Node.js 内置 fetch（HTTP 路径）+ Chrome CDP fallback
 - **图片分析：** AI Agent 多模态能力（零外部依赖）
 - **音频提取：** ffmpeg-static (npm)
 - **ASR：** 科大讯飞 LFASR / OpenAI Whisper

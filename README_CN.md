@@ -27,6 +27,7 @@ LinkMind 会：
 |------|---------|---------|
 | 微博 | `weibo.com`, `m.weibo.cn` | 移动端 API (`m.weibo.cn`) |
 | 小红书 | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
+| 微信公众号 | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
 
 ## 项目结构
 
@@ -45,7 +46,8 @@ LinkMind/
 │   │   ├── download-images.ts # 图片下载器
 │   │   ├── extract-transcript.ts # 视频 ASR 转写
 │   │   ├── weibo.ts           # 微博内容提取器
-│   │   └── xiaohongshu.ts     # 小红书内容提取器 (CDP)
+│   │   ├── xiaohongshu.ts     # 小红书内容提取器 (CDP)
+│   │   └── wechat.ts          # 微信公众号内容提取器
 │   ├── references/
 │   │   └── deep-summary-guide.md
 │   └── templates/
@@ -75,7 +77,7 @@ LinkMind/
 
 ## 功能特性
 
-- **多平台抓取** — 微博（移动端 API）和小红书（Chrome CDP）
+- **多平台抓取** — 微博（移动端 API）、小红书（Chrome CDP）和微信公众号（HTTP fetch + CDP fallback）
 - **AI 深度总结** — 结构化总结，含关键要点，按内容类型定制
 - **图片下载** — 图片保存到知识库的 `LinkMind/attachments/` 目录，支持完全离线访问
 - **图片多模态分析** — AI 读取每张下载的图片，提取可见文字（OCR）和关键视觉信息，分析结果附加在笔记中每张图片后，并融入深度总结
@@ -212,6 +214,9 @@ npx tsx weibo.ts "https://m.weibo.cn/detail/4331051486294436"
 
 # 小红书
 npx tsx xiaohongshu.ts "https://www.xiaohongshu.com/explore/6a7b8c9d0e1f"
+
+# 微信公众号
+npx tsx wechat.ts "https://mp.weixin.qq.com/s/xxxxxxxxxxxxxxxx"
 ```
 
 脚本输出 JSON 到 stdout，AI Agent 消费后生成最终的 Markdown 文件。
@@ -309,14 +314,15 @@ has_image_analysis: true
 | Step 5 | 图片多模态 — AI 视觉分析图片、提取内容用于总结 | 已完成 |
 | Step 6 | 视频 ASR — 音频提取、语音转文字（讯飞/Whisper）、SRT 生成 | 进行中 |
 | Step 7 | 分发 — OpenClaw/ClawHub/Claude Code 安装、Chrome CDP、.env 配置 | 已完成 |
+| Step 8 | 微信公众号 — HTTP fetch + Chrome CDP fallback 完整抓取 | 已完成 |
 
 详见 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md)。
 
 ## 技术栈
 
 - **TypeScript** (ES2022, ESM) + [tsx](https://github.com/privatenumber/tsx) 零配置执行
-- **Node.js 内置 fetch** 调用微博移动端 API
-- **Chrome DevTools Protocol** 抓取小红书（复用系统 Chrome，无需额外下载）
+- **Node.js 内置 fetch** 调用微博移动端 API 和微信公众号文章
+- **Chrome DevTools Protocol** 抓取小红书和微信 CDP fallback（复用系统 Chrome，无需额外下载）
 - **AI Agent 多模态视觉** 提取图片内容和 OCR
 - **ffmpeg-static** 视频转音频
 - **讯飞 LFASR / OpenAI Whisper** 语音转文字
