@@ -118,3 +118,17 @@ export function checkDependency(cmd: string): void {
     throw err;
   }
 }
+
+// ---------------------------------------------------------------------------
+// iFlytek LFASR auth
+// ---------------------------------------------------------------------------
+
+function iflytekAuth(
+  appId: string,
+  apiKey: string,
+): { appId: string; ts: string; signa: string } {
+  const ts = String(Math.floor(Date.now() / 1000));
+  const md5 = createHash("md5").update(appId + ts).digest("hex");
+  const signa = createHmac("sha1", apiKey).update(md5).digest("base64");
+  return { appId, ts, signa };
+}

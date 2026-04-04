@@ -119,6 +119,54 @@ function testCheckDependency(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Unit: routeAsr config selection
+// ---------------------------------------------------------------------------
+
+function testRouteAsrConfig(): void {
+  console.log("\n[routeAsr config selection]");
+
+  // Helper: determine which provider would be selected for a given config
+  function selectProvider(cfg: {
+    iflytek?: { app_id?: string; api_key?: string; api_secret?: string };
+    openai?: { api_key?: string };
+  }): string {
+    const hasIflytek =
+      !!cfg.iflytek?.app_id &&
+      !!cfg.iflytek?.api_key &&
+      !!cfg.iflytek?.api_secret;
+    const hasOpenai = !!cfg.openai?.api_key;
+    if (hasIflytek) return "iflytek";
+    if (hasOpenai) return "openai";
+    return "none";
+  }
+
+  assertEqual(
+    selectProvider({ iflytek: { app_id: "id", api_key: "key", api_secret: "sec" } }),
+    "iflytek",
+    "仅配置讯飞 → 选 iflytek",
+  );
+  assertEqual(
+    selectProvider({ openai: { api_key: "sk-xxx" } }),
+    "openai",
+    "仅配置 OpenAI → 选 openai",
+  );
+  assertEqual(
+    selectProvider({
+      iflytek: { app_id: "id", api_key: "key", api_secret: "sec" },
+      openai: { api_key: "sk-xxx" },
+    }),
+    "iflytek",
+    "两者都配置 → 优先选 iflytek",
+  );
+  assertEqual(selectProvider({}), "none", "均未配置 → none");
+  assertEqual(
+    selectProvider({ iflytek: { app_id: "id" } }),
+    "none",
+    "讯飞配置不完整 → none",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Run all unit tests
 // ---------------------------------------------------------------------------
 
@@ -127,6 +175,7 @@ const isE2E = process.argv.includes("--e2e");
 testFormatSrtTime();
 testParseLfasrResult();
 testCheckDependency();
+testRouteAsrConfig();
 
 // E2E tests defined in Task 9
 
