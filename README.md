@@ -27,6 +27,7 @@ LinkMind will:
 |----------|-------------|-------------------|
 | Weibo | `weibo.com`, `m.weibo.cn` | Mobile API (`m.weibo.cn`) |
 | Xiaohongshu | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
+| WeChat | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
 
 ## Project Structure
 
@@ -45,7 +46,8 @@ LinkMind/
 │   │   ├── download-images.ts # Image downloader
 │   │   ├── extract-transcript.ts # Video ASR transcript
 │   │   ├── weibo.ts           # Weibo content extractor
-│   │   └── xiaohongshu.ts     # Xiaohongshu content extractor (CDP)
+│   │   ├── xiaohongshu.ts     # Xiaohongshu content extractor (CDP)
+│   │   └── wechat.ts          # WeChat Official Account extractor
 │   ├── references/
 │   │   └── deep-summary-guide.md
 │   └── templates/
@@ -75,7 +77,7 @@ Notes are saved to your Obsidian vault:
 
 ## Features
 
-- **Multi-platform extraction** — Weibo (mobile API) and Xiaohongshu (Chrome CDP)
+- **Multi-platform extraction** — Weibo (mobile API), Xiaohongshu (Chrome CDP), and WeChat Official Accounts (HTTP fetch + CDP fallback)
 - **AI deep summary** — Structured summary with key takeaways, tailored to content type
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
 - **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
@@ -213,6 +215,9 @@ npx tsx weibo.ts "https://m.weibo.cn/detail/4331051486294436"
 
 # Xiaohongshu
 npx tsx xiaohongshu.ts "https://www.xiaohongshu.com/explore/6a7b8c9d0e1f"
+
+# WeChat Official Account
+npx tsx wechat.ts "https://mp.weixin.qq.com/s/xxxxxxxxxxxxxxxx"
 ```
 
 Scripts output JSON to stdout, which the AI agent consumes to generate the final Markdown file.
@@ -310,14 +315,15 @@ has_image_analysis: true
 | Step 5 | Image multimodal — AI vision analysis of images, content extraction for summary | Done |
 | Step 6 | Video ASR — audio extraction, speech-to-text (iFlytek/Whisper), SRT generation | In Progress |
 | Step 7 | Distribution — OpenClaw/ClawHub/Claude Code install, Chrome CDP, .env config | Done |
+| Step 8 | WeChat Official Account — HTTP fetch + Chrome CDP fallback extraction | Done |
 
 See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 
 ## Tech Stack
 
 - **TypeScript** (ES2022, ESM) with [tsx](https://github.com/privatenumber/tsx) for zero-config execution
-- **Node.js built-in fetch** for Weibo mobile API
-- **Chrome DevTools Protocol** for Xiaohongshu (uses system Chrome, zero extra download)
+- **Node.js built-in fetch** for Weibo mobile API and WeChat article fetch
+- **Chrome DevTools Protocol** for Xiaohongshu and WeChat CDP fallback (uses system Chrome, zero extra download)
 - **AI Agent multimodal vision** for image content extraction and OCR
 - **ffmpeg-static** for video-to-audio extraction
 - **iFlytek LFASR / OpenAI Whisper** for speech-to-text transcription
