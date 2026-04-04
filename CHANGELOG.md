@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - SKILL.md Step 2.7: `--video-url` parameter renamed to `--media-url` (broader platform support)
 - SKILL.md Step 2.7: added multilingual transcript note (translate to Chinese in deep summary)
+- SKILL.md 金句摘录：简化选取规则，去除三类型配额体系（观点型/概念定义型/行动指导型），改为直接选取最具洞察力或代表性的 3 句
+- `.claude/skills/linkmind-capture/SKILL.md`：同步 `--media-url` 参数名修正，与主 SKILL.md 保持一致
 
 ## [0.1.3] - 2026-04-04
 

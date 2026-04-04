@@ -162,7 +162,7 @@ ASR credentials in `.env`, extract the audio and transcribe it.
 
 ```bash
 npx tsx skills/linkmind/scripts/extract-transcript.ts \
-  --video-url "<VIDEO_URL>" \
+  --media-url "<VIDEO_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
   --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
@@ -243,38 +243,14 @@ synthesized together.)
 
 **金句摘录：**
 
-(Read the SRT file. Parse total entry count (N_total) and estimate video duration
-from the last entry's end timestamp. If end timestamp is unavailable, use
-N_total × 3 seconds as the total duration.
-
-Select 3 quotes using the type-quota system below. For each selected quote at
-SRT entry index i, calculate:
+(Read the SRT file and select the 3 most insightful or quotable sentences from the
+full transcript. Parse total entry count (N_total) and estimate video duration from
+the last entry's end timestamp. If end timestamp is unavailable, use N_total × 3
+seconds as the total duration. For each selected quote at SRT entry index i, calculate:
   approx_seconds = (i / N_total) × total_duration_seconds
   percent = round(i / N_total × 100)
   display as: `~MM:SS`（视频约 {percent}% 处）
 
-**Type quota — select one quote of each type, in priority order:**
-
-1. **观点型** — Expresses a distinctive insight or counter-intuitive conclusion.
-   Signal phrases: 「本质是」「真正决定」「往往不是…而是」「关键不在于」
-
-2. **概念定义型** — Clearly defines a core concept.
-   Signal phrases: 「等于」「就是」「定义为」「翻译成人话」「说白了」
-
-3. **行动指导型** — Directly actionable guidance.
-   Signal phrases: 「应该」「需要」「不要…要」「第一步」「关键是要」
-
-**Fallback rule:** If a type has no suitable candidate in the full transcript,
-substitute the best remaining quote of any type. Max 1 fallback per note.
-Never use the same type twice across the 3 quotes.
-Example: if no 概念定义型 candidate exists, select a second 观点型 entry — but do not then also substitute for 行动指导型.
-
-**Universal filters — exclude any entry that:**
-- Contains no substantive content — the entire entry consists only of filler words or sounds (e.g., "呢", "啊", "那个那个", "嗯", "就是说"); entries that begin with filler but contain meaningful content are still eligible
-- Falls within 10% of total video duration (in seconds) of an already-selected entry (avoid temporal clustering)
-
-Do NOT label quote types in the note output.
-
 > "（金句原文）"
 > —— `~MM:SS`（视频约 X% 处）
 
@@ -283,6 +259,11 @@ Do NOT label quote types in the note output.
 
 > "（金句原文）"
 > —— `~MM:SS`（视频约 X% 处）
+
+**Selection criteria for quotes:**
+- Choose sentences that best capture a core insight, key argument, or memorable phrasing
+- Spread timestamps across the video (one from early, one from middle, one from late)
+- Do NOT pick 3 consecutive or near-consecutive entries
 
 (If Step 2.7 was skipped because videoUrl is null, omit this section entirely.
 If Step 2.7 was skipped because ASR is not configured, add a note:
