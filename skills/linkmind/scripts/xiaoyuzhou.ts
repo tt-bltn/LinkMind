@@ -278,3 +278,77 @@ export async function downloadSubtitle(subtitleUrl: string): Promise<SubtitleEnt
   const content = await resp.text();
   return parseSubtitleEntries(content);
 }
+
+// ---------------------------------------------------------------------------
+// Error categorization
+// ---------------------------------------------------------------------------
+
+function categorizeError(e: unknown): { code: ErrorCode; details: string } {
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+  const httpStatus = (e as any).httpStatus as number | undefined;
+
+  if (httpStatus === 401 || httpStatus === 403)
+    return { code: "AUTH", details: msg };
+  if (httpStatus === 404)
+    return { code: "NOT_FOUND", details: msg };
+  if (
+    lower.includes("timeout") ||
+    lower.includes("fetch failed") ||
+    lower.includes("econnreset") ||
+    lower.includes("network")
+  )
+    return { code: "NETWORK", details: msg };
+  if (lower.includes("无法解析") || lower.includes("parse"))
+    return { code: "PARSE", details: msg };
+  return { code: "UNKNOWN", details: msg };
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const rawUrl = args[0];
+  const configPath = parseConfigArg(process.argv);
+
+  if (!rawUrl || !configPath) {
+    const err: HandlerError = {
+      error: "用法: npx tsx xiaoyuzhou.ts <url> --config <path>",
+    };
+    console.log(JSON.stringify(err));
+    process.exit(1);
+  }
+
+  try {
+    // Load config (for x-jike-access-token)
+    const config = loadConfig(configPath);
+    const token = config.cookies?.xiaoyuzhou;
+
+    // Resolve short link if needed
+    const finalUrl = rawUrl.includes("xyzfm.link")
+      ? await resolveShortLink(rawUrl)
+      : rawUrl;
+
+    // Parse episode ID and timestamp from URL
+    const { episodeId, timestampSeconds } = parseEpisodeUrl(finalUrl);
+
+    // Fetch episode metadata + optional transcript URL
+    const content = await fetchEpisodeData(episodeId, timestampSeconds, token);
+    console.log(JSON.stringify(content, null, 2));
+  } catch (e) {
+    const { code, details } = categorizeError(e);
+    const err: HandlerError = {
+      error: e instanceof Error ? e.message : String(e),
+      code,
+      details,
+    };
+    console.log(JSON.stringify(err, null, 2));
+    process.exit(1);
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
