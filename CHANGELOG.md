@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-04-04
+
+### Added
+
+- Video/audio ASR transcription (`skills/linkmind/scripts/extract-transcript.ts`)
+  - yt-dlp as primary media downloader (supports Weibo, Xiaohongshu, Bilibili, YouTube, podcasts)
+  - Direct `fetch` fallback for CDN audio URLs (e.g. Xiaoyuzhou podcasts)
+  - iFlytek LFASR integration (file upload + async polling, HMAC-SHA1 auth)
+  - OpenAI Whisper integration as fallback (`response_format: srt`)
+  - SRT subtitle file saved to `{vault}/LinkMind/attachments/{date}-{slug}/transcript.srt`
+  - Transcript `fullText` passed to AI deep summary; non-Chinese transcripts translated in summary
+  - `try/finally` cleanup of all temporary files
+- `DEPENDENCY` error code in `ErrorCode` type for missing system tools (yt-dlp, ffmpeg)
+- Unit tests: `parseLfasrResult`, `formatSrtTime`, `checkDependency`, ASR routing logic
+- E2E test skeleton in `test-transcript.ts` (`npm run test:transcript:e2e`)
+- `npm run transcript` and `npm run test:transcript` scripts
+- `LINKMIND_OPENAI_MODEL` config option for custom Whisper model names
+
+### Changed
+
+- SKILL.md Step 2.7: `--video-url` parameter renamed to `--media-url` (broader platform support)
+- SKILL.md Step 2.7: added multilingual transcript note (translate to Chinese in deep summary)
+- SKILL.md 金句摘录：简化选取规则，去除三类型配额体系（观点型/概念定义型/行动指导型），改为直接选取最具洞察力或代表性的 3 句
+- `.claude/skills/linkmind-capture/SKILL.md`：同步 `--media-url` 参数名修正，与主 SKILL.md 保持一致
+
 ## [0.1.3] - 2026-04-04
 
 ### Added

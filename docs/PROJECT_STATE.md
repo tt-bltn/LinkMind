@@ -2,7 +2,7 @@
 
 > 最后更新：2026-04-04
 
-## 当前阶段：Step 8 — 微信公众号支持 ✅
+## 当前阶段：Step 6 完成 — 视频/音频 ASR 转写 ✅
 
 ## 阶段总览
 
@@ -13,7 +13,7 @@
 | Step 3 | 加入小红书 — 实现 xiaohongshu.ts (Playwright) | ✅ 已完成 |
 | Step 4 | 打磨体验 — AI 总结、图片下载、错误处理优化 | ✅ 已完成 |
 | Step 5 | 图片多模态 — AI 视觉分析图片、提取内容用于总结 | ✅ 已完成 |
-| Step 6 | 视频 ASR — 音频提取、语音转文字 (讯飞/Whisper)、SRT 生成 | 🔧 进行中 |
+| Step 6 | 视频/音频 ASR — yt-dlp 下载、讯飞 LFASR/Whisper 转写、SRT 生成 | ✅ 已完成 |
 | Step 7 | 分发与安装 — OpenClaw/ClawHub/Claude Code 多渠道分发、Chrome CDP 替代 Playwright | ✅ 已完成 |
 | Step 8 | 微信公众号 — 实现 wechat.ts，HTTP fetch + Chrome CDP 双路径抓取 | ✅ 已完成 |
 
@@ -100,21 +100,21 @@
 
 ---
 
-## Step 6：视频 ASR 转写（进行中）
+## Step 6：视频 ASR 转写 ✅
 
-**目标：** 视频帖子提取音频 → ASR 语音识别 → 生成 SRT 字幕文件，转写文本参与深度总结。
+**目标：** 媒体（视频/音频）提取音频 → ASR 语音识别 → 生成 SRT 字幕文件，转写文本参与深度总结。
 
 | 任务 | 状态 |
 |------|------|
-| 实现 extract-transcript.ts 脚本 | ⬜ |
-| ffmpeg 音频提取集成 | ⬜ |
-| 科大讯飞 LFASR 语音转写集成 | ⬜ |
-| OpenAI Whisper API 集成 | ⬜ |
-| ASR 服务路由逻辑（优先讯飞、fallback OpenAI） | ⬜ |
-| SRT 字幕文件生成 | ⬜ |
-| SKILL.md 添加 Step 2.7 视频转写指令 | ⬜ |
-| 临时文件清理（只保留 SRT） | ⬜ |
-| 端到端测试：含视频的微博/小红书链接 → SRT + 笔记 | ⬜ |
+| 实现 extract-transcript.ts 脚本 | ✅ |
+| yt-dlp 媒体下载（优先）+ fetch 兜底 | ✅ |
+| 科大讯飞 LFASR 语音转写集成 | ✅ |
+| OpenAI Whisper API 集成 | ✅ |
+| ASR 服务路由逻辑（优先讯飞、fallback OpenAI） | ✅ |
+| SRT 字幕文件生成 | ✅ |
+| SKILL.md 更新 Step 2.7（--media-url，多语言说明） | ✅ |
+| 临时文件清理（try/finally） | ✅ |
+| 端到端测试骨架（test-transcript.ts） | ✅ |
 
 ---
 

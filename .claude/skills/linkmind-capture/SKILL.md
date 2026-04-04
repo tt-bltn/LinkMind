@@ -59,14 +59,13 @@ Cookies and ASR are **optional** — basic content capture works without them.
 
 Match the URL against these patterns:
 
-| Platform        | URL patterns                                                  |
-|-----------------|---------------------------------------------------------------|
-| **Weibo**       | `weibo.com`, `m.weibo.cn`                                    |
-| **Xiaohongshu** | `xiaohongshu.com`, `xhslink.com`                             |
-| **WeChat**      | `mp.weixin.qq.com`                                           |
+| Platform       | URL patterns                                                 |
+|----------------|--------------------------------------------------------------|
+| **Weibo**      | `weibo.com`, `m.weibo.cn`                                   |
+| **Xiaohongshu**| `xiaohongshu.com`, `xhslink.com`                            |
 
 If the URL does not match any supported platform, tell the user:
-"目前 LinkMind 支持微博、小红书和微信公众号链接，该链接暂不支持。"
+"目前 LinkMind 支持微博和小红书链接，该链接暂不支持。"
 
 ## Step 2: Run the handler script
 
@@ -81,11 +80,6 @@ npx tsx skills/linkmind/scripts/weibo.ts "<URL>" --config skills/linkmind/config
 **Xiaohongshu:**
 ```bash
 npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
-```
-
-**WeChat:**
-```bash
-npx tsx skills/linkmind/scripts/wechat.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
@@ -106,7 +100,7 @@ locally so the note is fully viewable offline in Obsidian.
 npx tsx skills/linkmind/scripts/download-images.ts \
   --urls "{comma-separated image URLs}" \
   --output-dir "{attachments directory}" \
-  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
 ```
 
 4. The script outputs a JSON mapping: `{ "original_url": "img-001.jpg", ... }`.
@@ -114,12 +108,6 @@ npx tsx skills/linkmind/scripts/download-images.ts \
 5. For successfully downloaded images, use the relative path in Markdown:
    `![image](attachments/{date}-{slug}/img-001.jpg)`
 6. For failed downloads, fall back to the original remote URL.
-
-**For WeChat articles specifically:** after obtaining the download mapping, also
-prepare the final `richContent` by replacing each `![](original_url)` in the
-`richContent` field with `![图片](attachments/{date}-{slug}/img-NNN.jpg)` (using
-the local filename from the mapping, or the original URL if download failed).
-Store this as the "resolved richContent" — you will use it in Step 3.
 
 If the `images` array is empty, skip this step.
 
@@ -140,26 +128,6 @@ visual content using your multimodal capabilities.
 2. Store the per-image analysis results — you will use them in two places:
    - **Step 3 (Markdown)**: Append as a blockquote immediately after each image
    - **Deep Summary**: Use all image analysis results as supplementary input
-
-**For WeChat articles**: after analyzing all images, update the "resolved richContent"
-(prepared in Step 2.5) by inserting each image's analysis blockquote immediately
-after the corresponding `![图片](...)` line. The final richContent should look like:
-
-```markdown
-Some text paragraph.
-
-![图片](attachments/{date}-{slug}/img-001.jpg)
-
-> **图片内容：** （Step 2.6 对该图片的分析结果）
-
-More text paragraph.
-
-![图片](attachments/{date}-{slug}/img-002.jpg)
-
-> **图片内容：** （Step 2.6 对该图片的分析结果）
-
-Final text paragraph.
-```
 
 **Output format per image (used in the Markdown):**
 
@@ -194,10 +162,10 @@ ASR credentials in `.env`, extract the audio and transcribe it.
 
 ```bash
 npx tsx skills/linkmind/scripts/extract-transcript.ts \
-  --media-url "<MEDIA_URL>" \
+  --media-url "<VIDEO_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
-  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
 ```
 
 3. The script outputs JSON to stdout:
@@ -217,10 +185,6 @@ npx tsx skills/linkmind/scripts/extract-transcript.ts \
 - `videoUrl` is `null` → no video to transcribe
 - `.env` has no ASR variables configured → ASR not configured;
   inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 .env 中配置。参考 .env.example。"
-
-**Multilingual transcripts:** If `fullText` is in a non-Chinese language, translate
-and present the key points in Chinese when writing the deep summary. The SRT file
-itself is kept in the original language.
 
 ## Step 3: Generate the Markdown file
 
@@ -255,12 +219,6 @@ has_transcript: {true/false}
 has_image_analysis: {true/false}
 ---
 
-(For WeChat articles only, also add these frontmatter fields:)
----
-account_name: '{accountName}'
-digest: '{digest}'
----
-
 # {title}
 
 > 来源：{platform display name} @{author} | {date}
@@ -275,12 +233,7 @@ synthesized together.)
 
 ## 原文内容
 
-(For **WeChat** articles: use the "resolved richContent" prepared in Steps 2.5–2.6
-— this is the Markdown with inline images and analysis blockquotes interleaved
-at their original positions. Do NOT add a separate 图片 section for WeChat.)
-
-(For **Weibo / Xiaohongshu**: use `{text}` here — images are listed separately
-in the 图片 section below.)
+{text}
 
 ## 视频转写
 
@@ -319,8 +272,8 @@ If Step 2.7 failed, add: "⚠️ 视频转写失败：{error message}")
 
 ## 图片
 
-(For **Weibo / Xiaohongshu** only: list each image followed by its multimodal
-analysis from Step 2.6. Use the local path if downloaded, otherwise the remote URL:)
+(For each image, show the image followed by its multimodal analysis from Step 2.6.
+Use the local path if downloaded, otherwise the remote URL:)
 
 ![图片](attachments/{date}-{slug}/img-001.jpg)
 
@@ -334,23 +287,9 @@ analysis from Step 2.6. Use the local path if downloaded, otherwise the remote U
 If an individual image's analysis failed, use:
 > **图片内容：** ⚠️ 图片分析失败)
 
-(For **WeChat** articles: OMIT this 图片 section entirely — images are already
-embedded inline in the 原文内容 section above.)
-
 ## 元信息
 
-(For Weibo — use reposts/comments/likes stats:)
 - 转发: {stats.reposts} | 评论: {stats.comments} | 点赞: {stats.likes}
-
-(For Xiaohongshu — use likes/collects/comments stats:)
-- 点赞: {stats.likes} | 收藏: {stats.collects} | 评论: {stats.comments}
-
-(For WeChat — use readCount/likeCount/inLookCount; show '—' for null values:)
-- 阅读: {readCount ?? '—'} | 点赞: {likeCount ?? '—'} | 在看: {inLookCount ?? '—'}
-- 公众号: {accountName}
-- 摘要: {digest}
-
-(Omit stats lines that are null for all fields.)
 ```
 
 ### File naming
@@ -412,25 +351,7 @@ Configure platform cookies in `skills/linkmind/.env`
 ```bash
 LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
 LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
-LINKMIND_WXMP_COOKIE="appmsgticket=xxx; wxuin=xxx; ..."
 ```
-
-> 注：WeChat Cookie 用于获取阅读/点赞/在看统计数据，不影响基础文章提取。
-
-You can also set cookies via `config.json`:
-
-```json
-{
-  "obsidian_vault": "/path/to/vault",
-  "cookies": {
-    "weibo": "SUB=xxx; SUBP=yyy",
-    "xiaohongshu": "a1=xxx; web_session=yyy",
-    "wechat": "appmsgticket=xxx; wxuin=xxx; ..."
-  }
-}
-```
-
-Environment variables take precedence over `config.json` values.
 
 To obtain cookies: log in to the platform in a browser, open DevTools → Application →
 Cookies, and copy the relevant cookie values as a semicolon-separated string.

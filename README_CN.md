@@ -29,6 +29,23 @@ LinkMind 会：
 | 小红书 | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
 | 微信公众号 | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
 
+## ASR 配置（可选）
+
+在 `skills/linkmind/.env` 中配置至少一个 ASR 服务以启用视频/音频转写：
+
+```bash
+# 科大讯飞 LFASR（推荐，中文效果好）
+LINKMIND_IFLYTEK_APP_ID=your_app_id
+LINKMIND_IFLYTEK_API_KEY=your_api_key
+LINKMIND_IFLYTEK_API_SECRET=your_api_secret
+
+# OpenAI Whisper（备选，支持多语言）
+LINKMIND_OPENAI_API_KEY=sk-xxx
+LINKMIND_OPENAI_MODEL=whisper-1  # 可选，默认 whisper-1
+```
+
+同时需要安装系统工具：`brew install yt-dlp ffmpeg`
+
 ## 项目结构
 
 ```
@@ -81,7 +98,7 @@ LinkMind/
 - **AI 深度总结** — 结构化总结，含关键要点，按内容类型定制
 - **图片下载** — 图片保存到知识库的 `LinkMind/attachments/` 目录，支持完全离线访问
 - **图片多模态分析** — AI 读取每张下载的图片，提取可见文字（OCR）和关键视觉信息，分析结果附加在笔记中每张图片后，并融入深度总结
-- **视频 ASR 转写** — 从视频中提取音频，通过讯飞或 OpenAI Whisper 转写，保存为 SRT 字幕；转写文本用于 AI 总结生成
+- **视频/音频 ASR 转写** — 通过 yt-dlp 提取音频（支持微博、小红书、B站、YouTube、播客等），调用科大讯飞 LFASR 或 OpenAI Whisper 转写，生成 SRT 字幕文件，转写文本参与 AI 深度总结
 - **Cookie 支持**（可选）— 配置登录 Cookie 以访问需要登录的内容，公开内容无需配置
 - **自动重试** — 网络请求自动指数退避重试；错误按类型分类并提供可操作的建议
 

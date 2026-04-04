@@ -29,6 +29,23 @@ LinkMind will:
 | Xiaohongshu | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
 | WeChat | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
 
+## ASR Configuration (optional)
+
+Configure at least one ASR service in `skills/linkmind/.env` to enable video/audio transcription:
+
+```bash
+# iFlytek LFASR (recommended for Chinese audio)
+LINKMIND_IFLYTEK_APP_ID=your_app_id
+LINKMIND_IFLYTEK_API_KEY=your_api_key
+LINKMIND_IFLYTEK_API_SECRET=your_api_secret
+
+# OpenAI Whisper (fallback, supports multilingual)
+LINKMIND_OPENAI_API_KEY=sk-xxx
+LINKMIND_OPENAI_MODEL=whisper-1  # optional, defaults to whisper-1
+```
+
+Also requires system tools: `brew install yt-dlp ffmpeg`
+
 ## Project Structure
 
 ```
@@ -81,7 +98,7 @@ Notes are saved to your Obsidian vault:
 - **AI deep summary** — Structured summary with key takeaways, tailored to content type
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
 - **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
-- **Video ASR transcript** — Extract audio from videos, transcribe via iFlytek or OpenAI Whisper, save as SRT subtitles; transcript text is used in AI summary generation
+- **Video/audio ASR transcript** — Extracts audio via yt-dlp (supports Weibo, Xiaohongshu, Bilibili, YouTube, podcasts), transcribes with iFlytek LFASR or OpenAI Whisper, generates an SRT subtitle file and incorporates the transcript text into the AI deep summary
 - **Cookie support** (optional) — Configure login cookies for accessing private or login-gated content; not required for public posts
 - **Auto-retry** — Network requests retry with exponential backoff; errors are categorized with actionable suggestions
 
