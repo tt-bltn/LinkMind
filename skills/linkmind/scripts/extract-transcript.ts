@@ -125,11 +125,11 @@ export function checkDependency(cmd: string): void {
 
 function iflytekAuth(
   appId: string,
-  apiKey: string,
+  secretKey: string,
 ): { appId: string; ts: string; signa: string } {
   const ts = String(Math.floor(Date.now() / 1000));
   const md5 = createHash("md5").update(appId + ts).digest("hex");
-  const signa = createHmac("sha1", apiKey).update(md5).digest("base64");
+  const signa = createHmac("sha1", secretKey).update(md5).digest("base64");
   return { appId, ts, signa };
 }
 
@@ -145,10 +145,10 @@ const POLL_TIMEOUT_MS  = 10 * 60 * 1_000; // 10 minutes
 export async function transcribeIflytek(
   mp3Path: string,
   appId: string,
-  apiKey: string,
+  secretKey: string,
 ): Promise<AsrResult> {
   // 1. Upload
-  const { ts, signa } = iflytekAuth(appId, apiKey);
+  const { ts, signa } = iflytekAuth(appId, secretKey);
   const authQuery = `appId=${appId}&ts=${ts}&signa=${encodeURIComponent(signa)}`;
 
   const fileBuffer = readFileSync(mp3Path);
@@ -181,7 +181,7 @@ export async function transcribeIflytek(
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
-    const { ts: ts2, signa: signa2 } = iflytekAuth(appId, apiKey);
+    const { ts: ts2, signa: signa2 } = iflytekAuth(appId, secretKey);
     const authQuery2 = `appId=${appId}&ts=${ts2}&signa=${encodeURIComponent(signa2)}`;
 
     const queryResp = await fetch(`${LFASR_QUERY_URL}?${authQuery2}`, {
@@ -339,7 +339,7 @@ async function routeAsr(
   const openai = asr.openai;
 
   const hasIflytek =
-    !!iflytek?.app_id && !!iflytek?.api_key;
+    !!iflytek?.app_id && !!iflytek?.secret_key;
   const hasOpenai = !!openai?.api_key;
 
   if (!hasIflytek && !hasOpenai) {
@@ -355,7 +355,7 @@ async function routeAsr(
       return await transcribeIflytek(
         mp3Path,
         iflytek!.app_id!,
-        iflytek!.api_key!,
+        iflytek!.secret_key!,
       );
     } catch (e) {
       if (!hasOpenai) throw e;

@@ -9,8 +9,7 @@ export interface AsrConfig {
   provider?: "iflytek" | "openai";
   iflytek?: {
     app_id?: string;
-    api_key?: string;
-    api_secret?: string;
+    secret_key?: string;
   };
   openai?: {
     api_key?: string;
@@ -97,10 +96,8 @@ function applyEnvOverrides(config: LinkMindConfig): LinkMindConfig {
   config.asr.iflytek ??= {};
   config.asr.iflytek.app_id =
     envString("LINKMIND_IFLYTEK_APP_ID") ?? config.asr.iflytek.app_id;
-  config.asr.iflytek.api_key =
-    envString("LINKMIND_IFLYTEK_API_KEY") ?? config.asr.iflytek.api_key;
-  config.asr.iflytek.api_secret =
-    envString("LINKMIND_IFLYTEK_API_SECRET") ?? config.asr.iflytek.api_secret;
+  config.asr.iflytek.secret_key =
+    envString("LINKMIND_IFLYTEK_SECRET_KEY") ?? config.asr.iflytek.secret_key;
 
   config.asr.openai ??= {};
   config.asr.openai.api_key =
