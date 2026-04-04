@@ -475,6 +475,32 @@ embedded inline in the 原文内容 section above.)
 (若 `subtitleAvailable = false` 且 `asrAvailable = false`，输出：)
 > ⚠️ 该剧集平台字幕不可用，ASR 转写也未成功。
 
+**金句摘录：**
+
+从 `filteredEntries`（或全集字幕）中选取 3 句最具洞见或值得引用的话，格式如下：
+
+- 计算条目总数 N_total 和时间范围（窗口模式：startSeconds ~ endSeconds；全集模式：0 ~ durationSeconds）
+- 若字幕来自 ASR（SRT 时间戳为相对于片段起始的偏移），实际剧集时间 = SRT 时间戳 + startSeconds
+- 对每条选出的金句（条目索引 i），计算剧集时间：
+  - 窗口模式：`approx_episode_seconds = startSeconds + (i / N_total) × (endSeconds - startSeconds)`
+  - 全集模式：`approx_episode_seconds = (i / N_total) × durationSeconds`
+  - `percent = round(approx_episode_seconds / durationSeconds × 100)`
+  - 显示为：`` `~MM:SS` ``（全集约 {percent}% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+**金句选取标准：**
+- 选最能捕捉核心洞见、关键论点或令人印象深刻的表述
+- 分散时间分布（窗口内靠前、中间、靠后各一句）
+- 不选连续或相邻条目
+
 ## 节目简介
 
 (仅限小宇宙平台，输出 `description` 字段内容，即 shownotes / 节目简介。)
