@@ -12,6 +12,7 @@ import {
   extractContentImages,
   formatUnixTimestamp,
   parseWechatHtml,
+  convertWechatHtmlToMd,
 } from "./wechat.js";
 import type { WechatContent } from "./types.js";
 
@@ -221,6 +222,96 @@ var desc = "这是文章摘要";
 }
 
 // ---------------------------------------------------------------------------
+// Unit: convertWechatHtmlToMd
+// ---------------------------------------------------------------------------
+
+function testConvertWechatHtmlToMd(): void {
+  console.log("\n[convertWechatHtmlToMd]");
+
+  // 1. 图片内联在段落之间
+  const html1 = `<p>第一段</p><img data-src="https://mmbiz.qpic.cn/img1.jpg" src="about:blank"/><p>第二段</p>`;
+  const md1 = convertWechatHtmlToMd(html1);
+  assert(md1.includes("第一段"), "文本第一段保留");
+  assert(md1.includes("第二段"), "文本第二段保留");
+  assert(md1.includes("![](https://mmbiz.qpic.cn/img1.jpg)"), "图片转为 Markdown 格式");
+  // 验证顺序：第一段 → 图片 → 第二段
+  const pos1 = md1.indexOf("第一段");
+  const posImg = md1.indexOf("![](");
+  const pos2 = md1.indexOf("第二段");
+  assert(pos1 < posImg && posImg < pos2, "图片位置在第一段之后、第二段之前（保持原文顺序）");
+
+  // 2. UI 域名图片被过滤
+  const html2 = `<p>内容</p><img src="https://res.wx.qq.com/icon.png"/>`;
+  const md2 = convertWechatHtmlToMd(html2);
+  assert(!md2.includes("res.wx.qq.com"), "UI 域名图片被过滤");
+  assert(md2.includes("内容"), "文本仍保留");
+
+  // 3. 优先使用 data-src
+  const html3 = `<img data-src="https://mmbiz.qpic.cn/real.jpg" src="https://mmbiz.qpic.cn/placeholder.jpg"/>`;
+  const md3 = convertWechatHtmlToMd(html3);
+  assert(md3.includes("real.jpg"), "优先使用 data-src URL");
+  assert(!md3.includes("placeholder.jpg"), "src 被 data-src 覆盖，不出现在结果中");
+
+  // 4. 无图片时行为与 stripWechatHtml 一致
+  const html4 = `<p>纯文本段落</p>`;
+  const md4 = convertWechatHtmlToMd(html4);
+  assertEqual(md4, "纯文本段落", "无图片时输出纯文本");
+
+  // 5. 多图片保持各自位置
+  const html5 = `<p>A</p><img data-src="https://img.com/1.jpg"/><p>B</p><img data-src="https://img.com/2.jpg"/><p>C</p>`;
+  const md5 = convertWechatHtmlToMd(html5);
+  const posA = md5.indexOf("A");
+  const pos1st = md5.indexOf("1.jpg");
+  const posB = md5.indexOf("B");
+  const pos2nd = md5.indexOf("2.jpg");
+  const posC = md5.indexOf("C");
+  assert(posA < pos1st && pos1st < posB && posB < pos2nd && pos2nd < posC,
+    "多图片各自保持在对应文本段落之间");
+}
+
+// ---------------------------------------------------------------------------
+// Unit: parseWechatHtml richContent field
+// ---------------------------------------------------------------------------
+
+function testParseWechatHtmlRichContent(): void {
+  console.log("\n[parseWechatHtml — richContent]");
+
+  const mockHtml = `<!DOCTYPE html><html>
+<script>
+var msg_title = "富文本测试";
+var nickname = "测试号";
+var ct = "1712345678";
+var cover = "";
+var desc = "";
+</script>
+<div id="js_content">
+  <p>开头段落</p>
+  <img data-src="https://mmbiz.qpic.cn/mid.jpg" src="about:blank"/>
+  <p>结尾段落</p>
+</div>
+</html>`;
+
+  const result = parseWechatHtml(mockHtml, "https://mp.weixin.qq.com/s/test");
+
+  assert(typeof result.richContent === "string" && result.richContent!.length > 0,
+    "richContent 字段存在且非空");
+  assert(result.richContent!.includes("开头段落"), "richContent 包含开头段落");
+  assert(result.richContent!.includes("结尾段落"), "richContent 包含结尾段落");
+  assert(result.richContent!.includes("![](https://mmbiz.qpic.cn/mid.jpg)"),
+    "richContent 包含内联图片 Markdown");
+
+  // 验证图片在两段文字之间
+  const rc = result.richContent!;
+  const pStart = rc.indexOf("开头段落");
+  const pImg = rc.indexOf("![](");
+  const pEnd = rc.indexOf("结尾段落");
+  assert(pStart < pImg && pImg < pEnd, "图片在两段文字之间（顺序正确）");
+
+  // text 字段仍是纯文本（无图片 Markdown）
+  assert(!result.text.includes("![]("), "text 字段不含图片 Markdown（保持原有行为）");
+}
+
+// ---------------------------------------------------------------------------
 // Unit: parseWechatHtml with deeply nested divs (regression for lazy-regex bug)
 // ---------------------------------------------------------------------------
 
@@ -327,7 +418,9 @@ async function run(): Promise<void> {
   testStripWechatHtml();
   testExtractContentImages();
   testFormatUnixTimestamp();
+  testConvertWechatHtmlToMd();
   testParseWechatHtml();
+  testParseWechatHtmlRichContent();
   testParseWechatHtmlNestedDivs();
 
   if (runE2E) {
