@@ -325,3 +325,147 @@ export async function downloadMedia(
     throw new Error(`ffmpeg 音频提取失败: ${ffmpeg.stderr}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// ASR routing
+// ---------------------------------------------------------------------------
+
+async function routeAsr(
+  mp3Path: string,
+  config: LinkMindConfig,
+): Promise<AsrResult> {
+  const asr = config.asr ?? {};
+  const iflytek = asr.iflytek;
+  const openai = asr.openai;
+
+  const hasIflytek =
+    !!iflytek?.app_id && !!iflytek?.api_key && !!iflytek?.api_secret;
+  const hasOpenai = !!openai?.api_key;
+
+  if (!hasIflytek && !hasOpenai) {
+    const err = new Error(
+      "ASR 服务未配置。请在 .env 中配置讯飞或 OpenAI 凭据（参考 .env.example）。",
+    );
+    (err as any).authCode = "AUTH";
+    throw err;
+  }
+
+  if (hasIflytek) {
+    try {
+      return await transcribeIflytek(
+        mp3Path,
+        iflytek!.app_id!,
+        iflytek!.api_key!,
+      );
+    } catch (e) {
+      if (!hasOpenai) throw e;
+      console.error(
+        `[linkmind] 讯飞转写失败，切换到 OpenAI: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  return await transcribeOpenai(
+    mp3Path,
+    openai!.api_key!,
+    openai!.base_url,
+    openai!.model,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Error categorization
+// ---------------------------------------------------------------------------
+
+function categorizeError(e: unknown): { code: ErrorCode; details: string } {
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+
+  if ((e as any).depCode === "DEPENDENCY")
+    return { code: "DEPENDENCY", details: msg };
+  if ((e as any).authCode === "AUTH" || lower.includes("未配置"))
+    return { code: "AUTH", details: msg };
+  if (
+    lower.includes("timeout") ||
+    lower.includes("超时") ||
+    lower.includes("network") ||
+    lower.includes("fetch")
+  )
+    return { code: "NETWORK", details: msg };
+  return { code: "UNKNOWN", details: msg };
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  // Parse CLI args
+  const args = process.argv.slice(2);
+  function getArg(flag: string): string | undefined {
+    const idx = args.indexOf(flag);
+    return idx !== -1 ? args[idx + 1] : undefined;
+  }
+
+  const mediaUrl  = getArg("--media-url");
+  const outputDir = getArg("--output-dir");
+  const configPath = getArg("--config") ?? parseConfigArg(process.argv);
+  const referer   = getArg("--referer") ?? "https://weibo.com";
+
+  if (!mediaUrl || !outputDir || !configPath) {
+    const err: HandlerError = {
+      error: "缺少必要参数: --media-url, --output-dir, --config",
+    };
+    console.log(JSON.stringify(err));
+    process.exit(1);
+  }
+
+  // Temp file paths
+  const hash = createHash("md5").update(mediaUrl).digest("hex").slice(0, 8);
+  const tmpMp3 = join(tmpdir(), `linkmind-${hash}.mp3`);
+
+  try {
+    // Load config
+    const config = loadConfig(configPath);
+
+    // Check dependencies
+    checkDependency("yt-dlp");
+    checkDependency("ffmpeg");
+
+    // Ensure output dir exists
+    if (!existsSync(outputDir)) {
+      mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Download media → mp3
+    await downloadMedia(mediaUrl, referer, tmpMp3);
+
+    // Transcribe
+    const asrResult = await routeAsr(tmpMp3, config);
+
+    // Save SRT
+    const srtPath = join(outputDir, "transcript.srt");
+    writeFileSync(srtPath, asrResult.srt, "utf-8");
+
+    const output: TranscriptOutput = {
+      srtPath: "transcript.srt",
+      fullText: asrResult.fullText,
+    };
+    console.log(JSON.stringify(output, null, 2));
+  } catch (e) {
+    const { code, details } = categorizeError(e);
+    const err: HandlerError = {
+      error: e instanceof Error ? e.message : String(e),
+      code,
+      details,
+    };
+    console.log(JSON.stringify(err, null, 2));
+    process.exit(1);
+  } finally {
+    try { if (existsSync(tmpMp3)) unlinkSync(tmpMp3); } catch { /* ignore */ }
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
