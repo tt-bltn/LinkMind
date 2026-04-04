@@ -117,6 +117,16 @@ function testFilterByTimeWindow(): void {
   assertEqual(filtered[0].text, "B", "第一条为 B");
   assertEqual(filtered[1].text, "C", "第二条为 C");
 
+  // startSec=null, endSec=65: only A(10-15) and B(60-65)
+  const fromStart = filterByTimeWindow(entries, null, 65);
+  assertEqual(fromStart.length, 2, "endSec=65 含 A 和 B");
+  assertEqual(fromStart[fromStart.length - 1].text, "B", "最后一条为 B");
+
+  // startSec=120, endSec=null: C(120-130) and D(200-210)
+  const toEnd = filterByTimeWindow(entries, 120, null);
+  assertEqual(toEnd.length, 2, "startSec=120 含 C 和 D");
+  assertEqual(toEnd[0].text, "C", "第一条为 C");
+
   // null window = all entries
   const all = filterByTimeWindow(entries, null, null);
   assertEqual(all.length, 4, "null 窗口返回全部");

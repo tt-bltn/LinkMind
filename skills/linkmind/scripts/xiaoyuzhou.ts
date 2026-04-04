@@ -268,9 +268,10 @@ export function formatSubtitleSegment(entries: SubtitleEntry[]): string {
  * Download subtitle file and parse into entries.
  */
 export async function downloadSubtitle(subtitleUrl: string): Promise<SubtitleEntry[]> {
-  const resp = await fetch(subtitleUrl, {
-    headers: { "User-Agent": APP_UA },
-  });
+  const resp = await withRetry(
+    () => fetch(subtitleUrl, { headers: { "User-Agent": APP_UA } }),
+    { shouldRetry: isRetryableError },
+  );
   if (!resp.ok) {
     throw new Error(`字幕下载失败: HTTP ${resp.status}`);
   }
