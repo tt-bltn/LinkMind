@@ -48,16 +48,20 @@ export function parseEpisodeUrl(url: string): ParsedEpisodeUrl {
 
 /**
  * Resolve a short link (xyzfm.link/s/xxx) by following HTTP redirect.
- * Returns the final URL (xiaoyuzhoufm.com/episode/...).
+ * Returns the final URL (xiaoyuzhoufm.com/episode/...) with fragment preserved.
+ *
+ * Uses redirect: "manual" to capture the raw Location header, which includes
+ * the URL fragment (#ts=...). fetch redirect:"follow" strips fragments from resp.url.
  */
 export async function resolveShortLink(url: string): Promise<string> {
   const resp = await fetch(url, {
     method: "HEAD",
-    redirect: "follow",
+    redirect: "manual",
     headers: { "User-Agent": MOBILE_UA },
   });
-  // fetch with redirect: "follow" gives us the final URL
-  return resp.url;
+  // Capture Location header to preserve the URL fragment (#ts=...)
+  const location = resp.headers.get("location");
+  return location ?? resp.url;
 }
 
 // ---------------------------------------------------------------------------
