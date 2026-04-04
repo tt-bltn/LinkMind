@@ -273,18 +273,203 @@ async function fetchViaHttp(url: string, cookie?: string): Promise<WechatContent
 }
 
 // ---------------------------------------------------------------------------
-// Main (stub)
+// CDP DOM extraction script
+// ---------------------------------------------------------------------------
+
+const WECHAT_CDP_EXTRACT = `(() => {
+  function getVar(name) {
+    try { return String(eval(name) ?? ''); } catch { return ''; }
+  }
+  function qs(sel) {
+    var el = document.querySelector(sel);
+    return el ? el.textContent.trim() : '';
+  }
+  var contentEl = document.querySelector('#js_content');
+  var descHtml = contentEl ? contentEl.innerHTML : '';
+  var imgs = Array.from(document.querySelectorAll('#js_content img'))
+    .map(function(img) {
+      return img.getAttribute('data-src') || img.getAttribute('src') || '';
+    })
+    .filter(function(s) { return s && s.startsWith('http'); });
+  return {
+    msg_title: getVar('msg_title') || qs('#activity-name') || qs('.rich_media_title'),
+    nickname: getVar('nickname') || qs('#js_name') || qs('.profile_nickname'),
+    ct: getVar('ct') || '',
+    cover: getVar('cover') || '',
+    desc: getVar('desc') || '',
+    descHtml: descHtml,
+    images: imgs,
+  };
+})()`;
+
+// ---------------------------------------------------------------------------
+// CDP fetch path
+// ---------------------------------------------------------------------------
+
+function parseCookieString(
+  cookieStr: string,
+  domain: string,
+): Array<{ name: string; value: string; domain: string; path: string }> {
+  return cookieStr
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx === -1) return null;
+      return {
+        name: pair.slice(0, eqIdx).trim(),
+        value: pair.slice(eqIdx + 1).trim(),
+        domain,
+        path: "/",
+      };
+    })
+    .filter(Boolean) as Array<{ name: string; value: string; domain: string; path: string }>;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchViaCdp(url: string, cookie?: string): Promise<WechatContent> {
+  const browser = await withRetry(
+    () => launchWithPage({ headless: false }),
+    { maxAttempts: 2, baseDelayMs: 2000 },
+  );
+
+  try {
+    const { page } = browser;
+
+    if (cookie) {
+      const parsed = parseCookieString(cookie, ".weixin.qq.com");
+      if (parsed.length) await page.setCookies(parsed);
+    }
+
+    await page.navigate(url, { timeout: 30_000 });
+    await sleep(3000);
+
+    await page.waitForSelector("#js_content, #activity-name", 15_000).catch(() => {});
+    await sleep(1500);
+
+    interface CdpExtractResult {
+      msg_title: string;
+      nickname: string;
+      ct: string;
+      cover: string;
+      desc: string;
+      descHtml: string;
+      images: string[];
+    }
+
+    const raw = await page.evaluate<CdpExtractResult>(WECHAT_CDP_EXTRACT);
+
+    if (!raw || (!raw.msg_title && !raw.descHtml)) {
+      throw new Error("CDP 无法提取微信文章内容，可能被拦截或需要登录");
+    }
+
+    const text = stripWechatHtml(raw.descHtml);
+    const title = raw.msg_title || makeTitle(text);
+
+    return {
+      platform: "wechat",
+      title,
+      author: raw.nickname || "未知",
+      accountName: raw.nickname || "未知",
+      date: formatUnixTimestamp(raw.ct),
+      digest: raw.desc || "",
+      coverImage: raw.cover || null,
+      text,
+      images: raw.images,
+      videoUrl: null,
+      readCount: null,
+      likeCount: null,
+      inLookCount: null,
+      originalUrl: url,
+      fetchedAt: new Date().toISOString(),
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator
+// ---------------------------------------------------------------------------
+
+async function fetchWechatData(url: string, cookie?: string): Promise<WechatContent> {
+  const httpResult = await fetchViaHttp(url, cookie);
+  if (httpResult) return httpResult;
+  return fetchViaCdp(url, cookie);
+}
+
+// ---------------------------------------------------------------------------
+// Error categorization
+// ---------------------------------------------------------------------------
+
+function categorizeError(e: unknown): { code: ErrorCode; details: string } {
+  const msg = e instanceof Error ? e.message : String(e);
+  const lower = msg.toLowerCase();
+  const status = (e as any)?.httpStatus as number | undefined;
+
+  if (status === 404 || lower.includes("无效的 url") || lower.includes("不是微信"))
+    return { code: "NOT_FOUND", details: "请检查链接是否是微信公众号文章链接" };
+  if (status === 403 || status === 401 || lower.includes("登录") || lower.includes("拦截"))
+    return { code: "AUTH", details: "内容需要登录，请在 .env 中配置 LINKMIND_WXMP_COOKIE（参考 .env.example）" };
+  if (status === 429 || lower.includes("rate") || lower.includes("频繁"))
+    return { code: "RATE_LIMIT", details: "请求过于频繁，建议稍后重试" };
+  if (lower.includes("无法提取") || lower.includes("parse") || lower.includes("变更"))
+    return { code: "PARSE", details: "内容解析失败，页面结构可能已变更，请提 issue" };
+  if (
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("timeout") ||
+    lower.includes("econnr") ||
+    lower.includes("chrome")
+  )
+    return { code: "NETWORK", details: "网络请求失败，建议检查网络连接后重试" };
+
+  return { code: "UNKNOWN", details: "建议稍后重试" };
+}
+
+// ---------------------------------------------------------------------------
+// Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const url = process.argv[2];
+
   if (!url) {
     const err: HandlerError = { error: "请提供微信公众号文章链接作为参数" };
     console.log(JSON.stringify(err));
     process.exit(1);
   }
-  console.log(JSON.stringify({ error: "处理器尚未完整实现" }));
-  process.exit(1);
+
+  try {
+    const configPath = parseConfigArg(process.argv);
+    let configCookie: string | undefined;
+    if (configPath) {
+      try {
+        const cfg = loadConfig(configPath);
+        if (cfg.cookies?.wechat) configCookie = cfg.cookies.wechat;
+      } catch {
+        // Non-fatal; proceed without cookie
+      }
+    }
+
+    const canonical = extractArticleUrl(url);
+    const content = await fetchWechatData(canonical, configCookie);
+    console.log(JSON.stringify(content, null, 2));
+  } catch (e) {
+    const { code, details } = categorizeError(e);
+    const err: HandlerError = {
+      error: e instanceof Error ? e.message : String(e),
+      code,
+      url,
+      details,
+    };
+    console.log(JSON.stringify(err, null, 2));
+    process.exit(1);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
