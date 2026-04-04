@@ -108,9 +108,62 @@ export function formatUnixTimestamp(ts: string): string {
   if (isNaN(d.getTime())) return today;
   return d.toISOString().slice(0, 10);
 }
-// parseWechatHtml — implemented in Task 5
-export function parseWechatHtml(_html: string, _originalUrl: string): WechatContent {
-  throw new Error("Not implemented");
+
+// ---------------------------------------------------------------------------
+// Helper functions for parseWechatHtml
+// ---------------------------------------------------------------------------
+
+function makeTitle(text: string): string {
+  const firstLine = text.split("\n")[0];
+  if (firstLine.length <= 30) return firstLine;
+  return firstLine.slice(0, 30) + "…";
+}
+
+function extractOgMeta(html: string, property: string): string | null {
+  const m = html.match(
+    new RegExp(`<meta[^>]+property="${property}"[^>]+content="([^"]*)"`, "i"),
+  );
+  return m ? m[1] : null;
+}
+
+function extractVideoUrl(html: string): string | null {
+  const m = html.match(/<video[^>]*>[\s\S]*?<source[^>]+src="([^"]+)"/i)
+    ?? html.match(/<video[^>]+src="([^"]+)"/i);
+  return m ? m[1] : null;
+}
+
+export function parseWechatHtml(html: string, originalUrl: string): WechatContent {
+  const title = extractHtmlVar(html, "msg_title") ?? extractOgMeta(html, "og:title") ?? "";
+  const nickname = extractHtmlVar(html, "nickname") ?? "";
+  const ct = extractHtmlVar(html, "ct") ?? "0";
+  const coverVar = extractHtmlVar(html, "cover") ?? "";
+  const coverImage = coverVar || extractOgMeta(html, "og:image") || null;
+  const digest = extractHtmlVar(html, "desc") ?? extractOgMeta(html, "og:description") ?? "";
+
+  // Extract #js_content
+  const contentMatch = html.match(/<div[^>]+id="js_content"[^>]*>([\s\S]*?)<\/div>/i);
+  const contentHtml = contentMatch ? contentMatch[1] : "";
+  const text = stripWechatHtml(contentHtml);
+  const images = extractContentImages(contentHtml);
+  const videoUrl = extractVideoUrl(contentHtml);
+
+  return {
+    platform: "wechat",
+    title: title || makeTitle(text),
+    author: nickname || "未知",
+    accountName: nickname || "未知",
+    date: formatUnixTimestamp(ct),
+    digest,
+    coverImage: coverImage || null,
+    text,
+    images,
+    videoUrl,
+    readCount: null,
+    likeCount: null,
+    inLookCount: null,
+    originalUrl,
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------

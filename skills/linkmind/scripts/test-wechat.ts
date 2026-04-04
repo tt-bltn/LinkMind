@@ -169,6 +169,57 @@ function testFormatUnixTimestamp(): void {
   assertEqual(formatUnixTimestamp("invalid"), today, "无效值 → 今天");
 }
 
+// ---------------------------------------------------------------------------
+// Unit: parseWechatHtml
+// ---------------------------------------------------------------------------
+
+function testParseWechatHtml(): void {
+  console.log("\n[parseWechatHtml]");
+
+  const mockHtml = `<!DOCTYPE html><html>
+<head>
+<meta property="og:image" content="https://og-fallback.jpg"/>
+</head>
+<script>
+var msg_title = "测试文章";
+var nickname = "测试公众号";
+var ct = "1712345678";
+var cover = "https://cover.jpg";
+var desc = "这是文章摘要";
+</script>
+<div id="js_content">
+  <p>文章正文第一段</p>
+  <img data-src="https://mmbiz.qpic.cn/img1.jpg" src="about:blank"/>
+  <p>文章正文第二段</p>
+</div>
+</html>`;
+
+  const url = "https://mp.weixin.qq.com/s/TestId123";
+  const result: WechatContent = parseWechatHtml(mockHtml, url);
+
+  assertEqual(result.platform, "wechat", "platform 为 wechat");
+  assertEqual(result.title, "测试文章", "title 来自 msg_title");
+  assertEqual(result.author, "测试公众号", "author 来自 nickname");
+  assertEqual(result.accountName, "测试公众号", "accountName 来自 nickname");
+  assertEqual(result.date, "2024-04-05", "date 由 ct 时间戳转换");
+  assertEqual(result.digest, "这是文章摘要", "digest 来自 desc");
+  assertEqual(result.coverImage, "https://cover.jpg", "coverImage 来自 cover 变量");
+  assert(result.text.includes("文章正文第一段"), "text 包含正文内容");
+  assertEqual(result.images.length, 1, "提取 1 张图片");
+  assertEqual(result.images[0], "https://mmbiz.qpic.cn/img1.jpg", "图片 URL 正确");
+  assertEqual(result.readCount, null, "无 Cookie 时 readCount 为 null");
+  assertEqual(result.likeCount, null, "无 Cookie 时 likeCount 为 null");
+  assertEqual(result.inLookCount, null, "无 Cookie 时 inLookCount 为 null");
+  assertEqual(result.originalUrl, url, "originalUrl 保持原始链接");
+  assert(typeof result.fetchedAt === "string", "fetchedAt 存在");
+  assertEqual(result.videoUrl, null, "无视频时 videoUrl 为 null");
+
+  // og:image 作为 cover 的回退
+  const htmlNoCover = mockHtml.replace(`var cover = "https://cover.jpg";`, `var cover = "";`);
+  const result2 = parseWechatHtml(htmlNoCover, url);
+  assertEqual(result2.coverImage, "https://og-fallback.jpg", "cover 为空时回退到 og:image");
+}
+
 async function run(): Promise<void> {
   const runE2E = process.argv.includes("--e2e");
 
@@ -179,6 +230,7 @@ async function run(): Promise<void> {
   testStripWechatHtml();
   testExtractContentImages();
   testFormatUnixTimestamp();
+  testParseWechatHtml();
 
   if (runE2E) {
     console.log("\n[E2E] 将在 Task 8 中添加");
