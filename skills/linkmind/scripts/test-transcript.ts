@@ -193,9 +193,8 @@ if (!isE2E) {
 async function runE2E(): Promise<void> {
   console.log("\n=== E2E Tests (requires ASR credentials) ===");
 
-  // Replace with a real Weibo video URL for testing
   const testVideoUrl = process.env.TEST_VIDEO_URL ??
-    "https://weibo.com/1197161814/P9YdE2UhJ"; // example, may expire
+    "https://weibo.com/2192828333/QyWziEdkQ"; // ElevenLabs fine-tune demo, verified working
 
   const tmpOutputDir = `/tmp/linkmind-e2e-${Date.now()}`;
   const configPath = process.env.TEST_CONFIG_PATH ??
