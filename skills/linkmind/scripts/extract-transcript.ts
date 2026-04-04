@@ -95,3 +95,26 @@ export function parseLfasrResult(orderResult: string): AsrResult {
 
   return { srt, fullText };
 }
+
+// ---------------------------------------------------------------------------
+// System dependency check
+// ---------------------------------------------------------------------------
+
+const INSTALL_HINTS: Record<string, string> = {
+  "yt-dlp": "brew install yt-dlp  # 或: pip install yt-dlp",
+  "ffmpeg": "brew install ffmpeg",
+};
+
+/**
+ * Check if a system command exists in PATH.
+ * Throws an error with depCode="DEPENDENCY" if not found.
+ */
+export function checkDependency(cmd: string): void {
+  const result = spawnSync("which", [cmd], { encoding: "utf-8" });
+  if (result.status !== 0) {
+    const hint = INSTALL_HINTS[cmd] ?? `请安装 ${cmd}`;
+    const err = new Error(`${cmd} 未找到，请运行: ${hint}`);
+    (err as any).depCode = "DEPENDENCY";
+    throw err;
+  }
+}

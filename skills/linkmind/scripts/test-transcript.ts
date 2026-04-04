@@ -6,6 +6,7 @@
 import {
   formatSrtTime,
   parseLfasrResult,
+  checkDependency,
 } from "./extract-transcript.js";
 
 let passed = 0;
@@ -89,6 +90,35 @@ function testParseLfasrResult(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Unit: checkDependency
+// ---------------------------------------------------------------------------
+
+function testCheckDependency(): void {
+  console.log("\n[checkDependency]");
+
+  // Real command should not throw
+  let threw = false;
+  try {
+    checkDependency("node");
+  } catch {
+    threw = true;
+  }
+  assert(!threw, "node 存在 → 不抛错");
+
+  // Nonexistent command should throw with depCode="DEPENDENCY"
+  threw = false;
+  let errorCode: string | undefined;
+  try {
+    checkDependency("__linkmind_nonexistent_tool__");
+  } catch (e) {
+    threw = true;
+    errorCode = (e as any).depCode;
+  }
+  assert(threw, "不存在的命令 → 抛错");
+  assertEqual(errorCode, "DEPENDENCY", "错误码为 DEPENDENCY");
+}
+
+// ---------------------------------------------------------------------------
 // Run all unit tests
 // ---------------------------------------------------------------------------
 
@@ -96,6 +126,7 @@ const isE2E = process.argv.includes("--e2e");
 
 testFormatSrtTime();
 testParseLfasrResult();
+testCheckDependency();
 
 // E2E tests defined in Task 9
 
