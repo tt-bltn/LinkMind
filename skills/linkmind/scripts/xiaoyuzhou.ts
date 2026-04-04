@@ -76,7 +76,7 @@ interface XyzPageEpisode {
   shownotes: string;
   duration: number;
   enclosure: { url: string };
-  transcriptMediaId: string | null;
+  transcriptMediaId?: string | null;
   podcast: {
     title: string;
     author: string;
@@ -137,8 +137,9 @@ async function fetchTranscriptUrl(
     if (!resp.ok) return null;
     const json = await resp.json() as { data?: { transcriptUrl?: string } };
     return json?.data?.transcriptUrl ?? null;
-  } catch {
-    return null;  // 字幕获取失败不中断主流程
+  } catch (e) {
+    process.stderr.write(`[linkmind] 字幕 URL 获取失败（不影响主流程）: ${(e as Error).message}\n`);
+    return null;
   }
 }
 
