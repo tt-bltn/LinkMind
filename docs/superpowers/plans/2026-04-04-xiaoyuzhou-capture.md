@@ -259,7 +259,7 @@ export function parseEpisodeUrl(url: string): ParsedEpisodeUrl {
   }
 
   // Extract episode ID from path /episode/{id}
-  const idMatch = url.match(/\/episode\/([a-f0-9]+)/i);
+  const idMatch = url.match(/\/episode\/([\w]+)/i);
   if (!idMatch) {
     throw new Error(`无法从 URL 中提取 episode ID: ${url}`);
   }
