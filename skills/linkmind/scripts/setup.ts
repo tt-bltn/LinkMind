@@ -9,7 +9,7 @@ const ENV_PATH = resolve(SKILL_DIR, ".env");
 
 interface ExistingConfig {
   obsidian_vault?: string;
-  cookies?: { weibo?: string; xiaohongshu?: string };
+  cookies?: { weibo?: string; xiaohongshu?: string; wechat?: string };
   asr?: {
     provider?: string;
     iflytek?: { app_id?: string; api_key?: string; api_secret?: string };
@@ -111,6 +111,7 @@ async function main() {
 
   let weiboCookie = "";
   let xhsCookie = "";
+  let wxmpCookie = "";
 
   if (wantCookies) {
     p.log.info(
@@ -134,6 +135,15 @@ async function main() {
       initialValue: prevXhs,
     });
     if (!p.isCancel(xhs)) xhsCookie = xhs.trim();
+
+    const prevWxmp =
+      existingEnv.LINKMIND_WXMP_COOKIE || existing.cookies?.wechat || "";
+    const wxmp = await p.text({
+      message: `微信公众号文章 Cookie${prevWxmp ? "（已有配置，回车保留）" : "（可留空）"}`,
+      placeholder: "LINKMIND_WXMP_COOKIE",
+      initialValue: prevWxmp,
+    });
+    if (!p.isCancel(wxmp)) wxmpCookie = wxmp.trim();
   }
 
   // --- 3. ASR (optional → .env) ---
@@ -213,6 +223,7 @@ async function main() {
   const envLines: string[] = [];
   if (weiboCookie) envLines.push(`LINKMIND_WEIBO_COOKIE="${weiboCookie}"`);
   if (xhsCookie) envLines.push(`LINKMIND_XHS_COOKIE="${xhsCookie}"`);
+  if (wxmpCookie) envLines.push(`LINKMIND_WXMP_COOKIE="${wxmpCookie}"`);
   if (iflytekAppId) envLines.push(`LINKMIND_IFLYTEK_APP_ID=${iflytekAppId}`);
   if (iflytekApiKey) envLines.push(`LINKMIND_IFLYTEK_API_KEY=${iflytekApiKey}`);
   if (iflytekApiSecret)
@@ -223,6 +234,7 @@ async function main() {
   p.log.message(`  Obsidian 路径: ${vaultPath}`);
   if (weiboCookie) p.log.message(`  微博 Cookie:   ${mask(weiboCookie)}`);
   if (xhsCookie) p.log.message(`  小红书 Cookie: ${mask(xhsCookie)}`);
+  if (wxmpCookie) p.log.message(`  微信 Cookie:   ${mask(wxmpCookie)}`);
   if (iflytekAppId) p.log.message(`  讯飞 App ID:   ${mask(iflytekAppId)}`);
   if (iflytekApiKey) p.log.message(`  讯飞 API Key:  ${mask(iflytekApiKey)}`);
   if (openaiApiKey) p.log.message(`  OpenAI Key:    ${mask(openaiApiKey)}`);

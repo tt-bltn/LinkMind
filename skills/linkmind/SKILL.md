@@ -59,13 +59,14 @@ Cookies and ASR are **optional** — basic content capture works without them.
 
 Match the URL against these patterns:
 
-| Platform       | URL patterns                                                 |
-|----------------|--------------------------------------------------------------|
-| **Weibo**      | `weibo.com`, `m.weibo.cn`                                   |
-| **Xiaohongshu**| `xiaohongshu.com`, `xhslink.com`                            |
+| Platform        | URL patterns                                                  |
+|-----------------|---------------------------------------------------------------|
+| **Weibo**       | `weibo.com`, `m.weibo.cn`                                    |
+| **Xiaohongshu** | `xiaohongshu.com`, `xhslink.com`                             |
+| **WeChat**      | `mp.weixin.qq.com`                                           |
 
 If the URL does not match any supported platform, tell the user:
-"目前 LinkMind 支持微博和小红书链接，该链接暂不支持。"
+"目前 LinkMind 支持微博、小红书和微信公众号链接，该链接暂不支持。"
 
 ## Step 2: Run the handler script
 
@@ -80,6 +81,11 @@ npx tsx skills/linkmind/scripts/weibo.ts "<URL>" --config skills/linkmind/config
 **Xiaohongshu:**
 ```bash
 npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
+```
+
+**WeChat:**
+```bash
+npx tsx skills/linkmind/scripts/wechat.ts "<URL>" --config skills/linkmind/config.json
 ```
 
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
@@ -100,7 +106,7 @@ locally so the note is fully viewable offline in Obsidian.
 npx tsx skills/linkmind/scripts/download-images.ts \
   --urls "{comma-separated image URLs}" \
   --output-dir "{attachments directory}" \
-  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
 ```
 
 4. The script outputs a JSON mapping: `{ "original_url": "img-001.jpg", ... }`.
@@ -165,7 +171,7 @@ npx tsx skills/linkmind/scripts/extract-transcript.ts \
   --video-url "<VIDEO_URL>" \
   --output-dir "{attachments directory}" \
   --config skills/linkmind/config.json \
-  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+  --referer "{platform homepage: https://weibo.com / https://www.xiaohongshu.com / https://mp.weixin.qq.com}"
 ```
 
 3. The script outputs JSON to stdout:
@@ -219,6 +225,12 @@ has_transcript: {true/false}
 has_image_analysis: {true/false}
 ---
 
+(For WeChat articles only, also add these frontmatter fields:)
+---
+account_name: '{accountName}'
+digest: '{digest}'
+---
+
 # {title}
 
 > 来源：{platform display name} @{author} | {date}
@@ -267,7 +279,18 @@ If an individual image's analysis failed, use:
 
 ## 元信息
 
+(For Weibo — use reposts/comments/likes stats:)
 - 转发: {stats.reposts} | 评论: {stats.comments} | 点赞: {stats.likes}
+
+(For Xiaohongshu — use likes/collects/comments stats:)
+- 点赞: {stats.likes} | 收藏: {stats.collects} | 评论: {stats.comments}
+
+(For WeChat — use readCount/likeCount/inLookCount; show '—' for null values:)
+- 阅读: {readCount ?? '—'} | 点赞: {likeCount ?? '—'} | 在看: {inLookCount ?? '—'}
+- 公众号: {accountName}
+- 摘要: {digest}
+
+(Omit stats lines that are null for all fields.)
 ```
 
 ### File naming
@@ -329,7 +352,25 @@ Configure platform cookies in `skills/linkmind/.env`
 ```bash
 LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
 LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
+LINKMIND_WXMP_COOKIE="appmsgticket=xxx; wxuin=xxx; ..."
 ```
+
+> 注：WeChat Cookie 用于获取阅读/点赞/在看统计数据，不影响基础文章提取。
+
+You can also set cookies via `config.json`:
+
+```json
+{
+  "obsidian_vault": "/path/to/vault",
+  "cookies": {
+    "weibo": "SUB=xxx; SUBP=yyy",
+    "xiaohongshu": "a1=xxx; web_session=yyy",
+    "wechat": "appmsgticket=xxx; wxuin=xxx; ..."
+  }
+}
+```
+
+Environment variables take precedence over `config.json` values.
 
 To obtain cookies: log in to the platform in a browser, open DevTools → Application →
 Cookies, and copy the relevant cookie values as a semicolon-separated string.

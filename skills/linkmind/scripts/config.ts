@@ -23,6 +23,7 @@ export interface LinkMindConfig {
   cookies?: {
     weibo?: string;
     xiaohongshu?: string;
+    wechat?: string;
   };
   asr?: AsrConfig;
 }
@@ -88,6 +89,8 @@ function applyEnvOverrides(config: LinkMindConfig): LinkMindConfig {
     envString("LINKMIND_WEIBO_COOKIE") ?? config.cookies.weibo;
   config.cookies.xiaohongshu =
     envString("LINKMIND_XHS_COOKIE") ?? config.cookies.xiaohongshu;
+  config.cookies.wechat =
+    envString("LINKMIND_WXMP_COOKIE") ?? config.cookies.wechat;
 
   config.asr ??= {};
   config.asr.iflytek ??= {};
