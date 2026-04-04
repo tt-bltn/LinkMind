@@ -77,6 +77,33 @@ function testExtractArticleUrl(): void {
   assert(threw, "非文章页路径抛出错误");
 }
 
+// ---------------------------------------------------------------------------
+// Unit: extractHtmlVar
+// ---------------------------------------------------------------------------
+
+function testExtractHtmlVar(): void {
+  console.log("\n[extractHtmlVar]");
+
+  const html = `<script>
+var msg_title = "测试文章标题";
+var nickname = '公众号名称';
+var ct = "1712345678";
+var cover = "";
+var appmsgtoken = 'tok123';
+</script>`;
+
+  assertEqual(extractHtmlVar(html, "msg_title"), "测试文章标题", "双引号字符串");
+  assertEqual(extractHtmlVar(html, "nickname"), "公众号名称", "单引号字符串");
+  assertEqual(extractHtmlVar(html, "ct"), "1712345678", "数字字符串");
+  assertEqual(extractHtmlVar(html, "cover"), "", "空字符串");
+  assertEqual(extractHtmlVar(html, "appmsgtoken"), "tok123", "单引号 token");
+  assertEqual(extractHtmlVar(html, "nonexistent"), null, "不存在的变量 → null");
+
+  // 变量名含特殊字符不应匹配前缀
+  const html2 = `<script>var msg_title_extra = "错误值"; var msg_title = "正确值";</script>`;
+  assertEqual(extractHtmlVar(html2, "msg_title"), "正确值", "精确匹配变量名");
+}
+
 // (其余测试函数将在后续 Task 中追加)
 
 async function run(): Promise<void> {
@@ -85,6 +112,7 @@ async function run(): Promise<void> {
   console.log("=== WeChat Handler Tests ===");
 
   testExtractArticleUrl();
+  testExtractHtmlVar();
 
   if (runE2E) {
     console.log("\n[E2E] 将在 Task 8 中添加");

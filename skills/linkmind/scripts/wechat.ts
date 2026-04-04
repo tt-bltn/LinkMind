@@ -40,10 +40,23 @@ export function extractArticleUrl(url: string): string {
   return url;
 }
 
-// Placeholder exports — implemented in later tasks
-export function extractHtmlVar(_html: string, _varName: string): string | null {
-  throw new Error("Not implemented");
+// ---------------------------------------------------------------------------
+// HTML variable extraction
+// ---------------------------------------------------------------------------
+
+export function extractHtmlVar(html: string, varName: string): string | null {
+  // 匹配 var <name> = "value"; 或 var <name> = 'value';
+  // 使用 \b 确保精确匹配变量名（不匹配前缀）
+  const re = new RegExp(
+    `var\\s+${varName}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`,
+    "s",
+  );
+  const m = html.match(re);
+  if (!m) return null;
+  return m[1] !== undefined ? m[1] : m[2] ?? null;
 }
+
+// Placeholder exports — implemented in later tasks
 export function stripWechatHtml(_html: string): string {
   throw new Error("Not implemented");
 }
