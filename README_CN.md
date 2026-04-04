@@ -28,6 +28,7 @@ LinkMind 会：
 | 微博 | `weibo.com`, `m.weibo.cn` | 移动端 API (`m.weibo.cn`) |
 | 小红书 | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
 | 微信公众号 | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
+| 小宇宙 | `xyzfm.link`, `xiaoyuzhoufm.com` | `__NEXT_DATA__` 抓取 + 平台字幕 API |
 
 ## ASR 配置（可选）
 
@@ -64,7 +65,8 @@ LinkMind/
 │   │   ├── extract-transcript.ts # 视频 ASR 转写
 │   │   ├── weibo.ts           # 微博内容提取器
 │   │   ├── xiaohongshu.ts     # 小红书内容提取器 (CDP)
-│   │   └── wechat.ts          # 微信公众号内容提取器
+│   │   ├── wechat.ts          # 微信公众号内容提取器
+│   │   └── xiaoyuzhou.ts      # 小宇宙播客内容提取器
 │   ├── references/
 │   │   └── deep-summary-guide.md
 │   └── templates/
@@ -94,11 +96,12 @@ LinkMind/
 
 ## 功能特性
 
-- **多平台抓取** — 微博（移动端 API）、小红书（Chrome CDP）和微信公众号（HTTP fetch + CDP fallback）
+- **多平台抓取** — 微博（移动端 API）、小红书（Chrome CDP）、微信公众号（HTTP fetch + CDP fallback）和小宇宙播客（`__NEXT_DATA__` 抓取 + 平台字幕 API）
 - **AI 深度总结** — 结构化总结，含关键要点，按内容类型定制
 - **图片下载** — 图片保存到知识库的 `LinkMind/attachments/` 目录，支持完全离线访问
 - **图片多模态分析** — AI 读取每张下载的图片，提取可见文字（OCR）和关键视觉信息，分析结果附加在笔记中每张图片后，并融入深度总结
-- **视频/音频 ASR 转写** — 通过 yt-dlp 提取音频（支持微博、小红书、B站、YouTube、播客等），调用科大讯飞 LFASR 或 OpenAI Whisper 转写，生成 SRT 字幕文件，转写文本参与 AI 深度总结
+- **视频/音频 ASR 转写** — 通过 yt-dlp 提取音频（支持微博、小红书、B站、YouTube、播客等），调用科大讯飞 LFASR 或 OpenAI Whisper 转写，生成 SRT 字幕文件，转写文本参与 AI 深度总结；小宇宙播客优先使用平台字幕（需配置 `x-jike-access-token`），无字幕时自动降级为 ASR
+- **播客时间打点** — 小宇宙分享链接含时间戳（`#ts=…`）时，仅提取该时间点前后 2 分钟的内容，笔记中附带带时间标注的金句摘录
 - **Cookie 支持**（可选）— 配置登录 Cookie 以访问需要登录的内容，公开内容无需配置
 - **自动重试** — 网络请求自动指数退避重试；错误按类型分类并提供可操作的建议
 
@@ -234,6 +237,9 @@ npx tsx xiaohongshu.ts "https://www.xiaohongshu.com/explore/6a7b8c9d0e1f"
 
 # 微信公众号
 npx tsx wechat.ts "https://mp.weixin.qq.com/s/xxxxxxxxxxxxxxxx"
+
+# 小宇宙播客
+npx tsx xiaoyuzhou.ts "https://www.xiaoyuzhoufm.com/episode/xxxxxxxxxxxx"
 ```
 
 脚本输出 JSON 到 stdout，AI Agent 消费后生成最终的 Markdown 文件。
@@ -329,9 +335,10 @@ has_image_analysis: true
 | Step 3 | 小红书处理器 — 基于 Playwright 的抓取 | 已完成 |
 | Step 4 | 打磨体验 — 图片下载、AI 总结优化、Cookie、错误处理 | 已完成 |
 | Step 5 | 图片多模态 — AI 视觉分析图片、提取内容用于总结 | 已完成 |
-| Step 6 | 视频 ASR — 音频提取、语音转文字（讯飞/Whisper）、SRT 生成 | 进行中 |
+| Step 6 | 视频 ASR — 音频提取、语音转文字（讯飞/Whisper）、SRT 生成 | 已完成 |
 | Step 7 | 分发 — OpenClaw/ClawHub/Claude Code 安装、Chrome CDP、.env 配置 | 已完成 |
 | Step 8 | 微信公众号 — HTTP fetch + Chrome CDP fallback 完整抓取 | 已完成 |
+| Step 9 | 小宇宙播客 — 剧集元数据、平台字幕、ASR 降级、时间打点抓取 | 已完成 |
 
 详见 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md)。
 

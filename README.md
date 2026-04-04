@@ -28,6 +28,7 @@ LinkMind will:
 | Weibo | `weibo.com`, `m.weibo.cn` | Mobile API (`m.weibo.cn`) |
 | Xiaohongshu | `xiaohongshu.com`, `xhslink.com` | Chrome DevTools Protocol (CDP) |
 | WeChat | `mp.weixin.qq.com` | HTTP fetch + Chrome CDP fallback |
+| 小宇宙 (Xiaoyuzhou) | `xyzfm.link`, `xiaoyuzhoufm.com` | `__NEXT_DATA__` scraping + platform subtitle API |
 
 ## ASR Configuration (optional)
 
@@ -64,7 +65,8 @@ LinkMind/
 │   │   ├── extract-transcript.ts # Video ASR transcript
 │   │   ├── weibo.ts           # Weibo content extractor
 │   │   ├── xiaohongshu.ts     # Xiaohongshu content extractor (CDP)
-│   │   └── wechat.ts          # WeChat Official Account extractor
+│   │   ├── wechat.ts          # WeChat Official Account extractor
+│   │   └── xiaoyuzhou.ts      # 小宇宙 podcast extractor
 │   ├── references/
 │   │   └── deep-summary-guide.md
 │   └── templates/
@@ -94,11 +96,12 @@ Notes are saved to your Obsidian vault:
 
 ## Features
 
-- **Multi-platform extraction** — Weibo (mobile API), Xiaohongshu (Chrome CDP), and WeChat Official Accounts (HTTP fetch + CDP fallback)
+- **Multi-platform extraction** — Weibo (mobile API), Xiaohongshu (Chrome CDP), WeChat Official Accounts (HTTP fetch + CDP fallback), and 小宇宙 podcasts (`__NEXT_DATA__` scraping + platform subtitle API)
 - **AI deep summary** — Structured summary with key takeaways, tailored to content type
 - **Image download** — Images are saved locally to `LinkMind/attachments/` inside your vault for full offline access
 - **Image multimodal analysis** — AI reads each downloaded image, extracts visible text (OCR) and key visual information, appends analysis after each image in the note, and incorporates findings into the deep summary
-- **Video/audio ASR transcript** — Extracts audio via yt-dlp (supports Weibo, Xiaohongshu, Bilibili, YouTube, podcasts), transcribes with iFlytek LFASR or OpenAI Whisper, generates an SRT subtitle file and incorporates the transcript text into the AI deep summary
+- **Video/audio ASR transcript** — Extracts audio via yt-dlp (supports Weibo, Xiaohongshu, Bilibili, YouTube, podcasts), transcribes with iFlytek LFASR or OpenAI Whisper, generates an SRT subtitle file and incorporates the transcript text into the AI deep summary; for 小宇宙 podcasts, uses platform subtitles when available (via `x-jike-access-token`) with ASR as fallback
+- **Podcast time-window capture** — For 小宇宙 shared links with a timestamp (`#ts=…`), extracts only the ±2-minute window around that timestamp, with time-labeled quote highlights in the note
 - **Cookie support** (optional) — Configure login cookies for accessing private or login-gated content; not required for public posts
 - **Auto-retry** — Network requests retry with exponential backoff; errors are categorized with actionable suggestions
 
@@ -235,6 +238,9 @@ npx tsx xiaohongshu.ts "https://www.xiaohongshu.com/explore/6a7b8c9d0e1f"
 
 # WeChat Official Account
 npx tsx wechat.ts "https://mp.weixin.qq.com/s/xxxxxxxxxxxxxxxx"
+
+# 小宇宙 podcast
+npx tsx xiaoyuzhou.ts "https://www.xiaoyuzhoufm.com/episode/xxxxxxxxxxxx"
 ```
 
 Scripts output JSON to stdout, which the AI agent consumes to generate the final Markdown file.
@@ -330,9 +336,10 @@ has_image_analysis: true
 | Step 3 | Xiaohongshu handler — Playwright-based extraction | Done |
 | Step 4 | Polish — image download, AI summary tuning, cookies, error handling | Done |
 | Step 5 | Image multimodal — AI vision analysis of images, content extraction for summary | Done |
-| Step 6 | Video ASR — audio extraction, speech-to-text (iFlytek/Whisper), SRT generation | In Progress |
+| Step 6 | Video ASR — audio extraction, speech-to-text (iFlytek/Whisper), SRT generation | Done |
 | Step 7 | Distribution — OpenClaw/ClawHub/Claude Code install, Chrome CDP, .env config | Done |
 | Step 8 | WeChat Official Account — HTTP fetch + Chrome CDP fallback extraction | Done |
+| Step 9 | 小宇宙 podcast — episode metadata, platform subtitles, ASR fallback, time-window capture | Done |
 
 See [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) for detailed progress.
 

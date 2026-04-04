@@ -1,6 +1,6 @@
 {
   "name": "linkmind-scripts",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,9 @@
     "wechat": "tsx wechat.ts",
     "test:wechat": "tsx test-wechat.ts",
     "test:wechat:e2e": "tsx test-wechat.ts --e2e",
+    "xiaoyuzhou": "tsx xiaoyuzhou.ts",
+    "test:xiaoyuzhou": "tsx test-xiaoyuzhou.ts",
+    "test:xiaoyuzhou:e2e": "tsx test-xiaoyuzhou.ts --e2e",
     "transcript": "tsx extract-transcript.ts",
     "test:transcript": "tsx test-transcript.ts",
     "test:transcript:e2e": "tsx test-transcript.ts --e2e"

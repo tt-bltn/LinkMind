@@ -24,6 +24,7 @@ export interface LinkMindConfig {
     weibo?: string;
     xiaohongshu?: string;
     wechat?: string;
+    xiaoyuzhou?: string; // x-jike-access-token，用于字幕 API
   };
   asr?: AsrConfig;
 }
@@ -91,6 +92,8 @@ function applyEnvOverrides(config: LinkMindConfig): LinkMindConfig {
     envString("LINKMIND_XHS_COOKIE") ?? config.cookies.xiaohongshu;
   config.cookies.wechat =
     envString("LINKMIND_WXMP_COOKIE") ?? config.cookies.wechat;
+  config.cookies.xiaoyuzhou =
+    envString("LINKMIND_XIAOYUZHOU_TOKEN") ?? config.cookies.xiaoyuzhou;
 
   config.asr ??= {};
   config.asr.iflytek ??= {};

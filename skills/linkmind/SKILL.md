@@ -1,7 +1,7 @@
 ---
 name: linkmind-capture
 description: >
-  Capture social media links (Weibo, Xiaohongshu) — extract text, images,
+  Capture social media links (Weibo, Xiaohongshu, WeChat, Xiaoyuzhou) — extract text, images,
   and metadata, then generate a Markdown note with AI deep summary,
   saved to the user's Obsidian vault.
 triggers:
@@ -64,9 +64,12 @@ Match the URL against these patterns:
 | **Weibo**       | `weibo.com`, `m.weibo.cn`                                    |
 | **Xiaohongshu** | `xiaohongshu.com`, `xhslink.com`                             |
 | **WeChat**      | `mp.weixin.qq.com`                                           |
+| **小宇宙**       | `xyzfm.link`, `xiaoyuzhoufm.com`                            |
+
+**小宇宙分享文本解析：** 用户分享的内容可能是纯文本（如 `分享播客《...》, 标记时点【17:03】https://xyzfm.link/s/xxx`），从中提取 URL 即可，时间点由脚本自动从重定向 URL 的 `#ts=` 片段解析。
 
 If the URL does not match any supported platform, tell the user:
-"目前 LinkMind 支持微博、小红书和微信公众号链接，该链接暂不支持。"
+"目前 LinkMind 支持微博、小红书、微信公众号和小宇宙播客链接，该链接暂不支持。"
 
 ## Step 2: Run the handler script
 
@@ -88,10 +91,66 @@ npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/
 npx tsx skills/linkmind/scripts/wechat.ts "<URL>" --config skills/linkmind/config.json
 ```
 
+**小宇宙 (Xiaoyuzhou):**
+```bash
+npx tsx skills/linkmind/scripts/xiaoyuzhou.ts "<URL>" --config skills/linkmind/config.json
+```
+
+> `<URL>` 是短链接（如 `https://xyzfm.link/s/xxx`）或完整剧集链接。脚本自动解析重定向、提取时间戳、获取剧集元数据和字幕链接。
+
 The script outputs JSON to stdout. If the JSON contains an `"error"` field,
 the extraction failed — check the `"code"` field for the error category
 (`NETWORK`, `AUTH`, `RATE_LIMIT`, `NOT_FOUND`, `PARSE`, `UNKNOWN`) and the
 `"details"` field for a user-friendly suggestion. Report both to the user.
+
+## Step 2.A: 下载小宇宙字幕（仅限小宇宙平台）
+
+**仅在 platform 为 `xiaoyuzhou` 时执行此步骤。**
+
+1. 检查 JSON 输出中的 `subtitleUrl` 字段：
+   - 若为 `null`：字幕不可用，跳到 **Step 2.B**（标记 `subtitleAvailable = false`）。
+   - 若非 `null`：继续下载字幕。
+
+2. 下载字幕文件：
+   ```bash
+   curl -s "<subtitleUrl>" -o /tmp/linkmind-subtitle.srt
+   ```
+
+3. 解析字幕（SRT 或 WebVTT 格式）：
+   - 解析每条字幕：序号、时间戳行（`HH:MM:SS,mmm --> HH:MM:SS,mmm` 或 `.` 分隔）、文本内容。
+   - 将时间戳转换为秒数：`startSeconds` / `endSeconds`。
+
+4. 标记 `subtitleAvailable = true`，将解析结果存入 `subtitleEntries`（用于下一步过滤）。
+
+**如果 curl 失败或文件为空：** 标记 `subtitleAvailable = false`，继续流程，不中止。
+
+## Step 2.B: 时间窗口过滤（仅限小宇宙平台）
+
+**仅在 platform 为 `xiaoyuzhou` 时执行此步骤。**
+
+根据 JSON 中的 `timestampSeconds` 决定摘要范围：
+
+**情况一：`timestampSeconds` 不为 null（用户分享了时间打点）**
+
+- 窗口范围：`[timestampSeconds - 120, timestampSeconds + 120]`（前后各 2 分钟）
+- 从 `subtitleEntries` 中过滤满足条件的条目（条目与窗口有任意重叠即选入）：
+  `entry.startSeconds < windowEnd && entry.endSeconds > windowStart`
+- 存入 `filteredEntries`，并记录 `summaryScope = "time_window"`。
+- **即使有完整字幕，也只对 `filteredEntries` 生成深度摘要**（用户明确指定了关注范围）。
+
+**情况二：`timestampSeconds` 为 null（完整收听）**
+
+- 不过滤，`filteredEntries = subtitleEntries`（使用全部字幕）。
+- 记录 `summaryScope = "full"`。
+
+**若 `subtitleAvailable = false`：**
+
+- `filteredEntries = []`，在生成摘要时注明字幕不可用。
+- 若 `timestampSeconds` 不为 null，在 Step 3 中提示用户：
+  "⚠️ 平台字幕不可用，无法提取该时间点的内容。如需转写，请配置 ASR 服务。"
+
+**格式化字幕文本：** 将 `filteredEntries` 转为纯文本（去掉时间戳行，每条以换行分隔），
+存入 `subtitleText`，供深度摘要使用。
 
 ## Step 2.5: Download images to vault
 
@@ -183,7 +242,59 @@ Final text paragraph.
 - `images` array is empty → no images to analyze
 - All images failed to download in Step 2.5 → no local files to read
 
+## Step 2.C: 小宇宙音频 ASR 降级（仅限小宇宙平台）
+
+**仅在以下所有条件同时成立时执行：**
+- `platform == xiaoyuzhou`
+- `subtitleAvailable == false`（Step 2.A 字幕不可用）
+- `audioUrl` 不为 null
+- `.env` 中已配置 ASR 服务（讯飞或 OpenAI）
+
+若条件不满足（ASR 未配置），跳过此步骤，在 Step 3 中提示：
+"⚠️ 平台字幕不可用，ASR 服务未配置，无法转写音频。请在 .env 中配置 ASR 凭据。"
+
+**执行步骤：**
+
+1. 确定时间参数（用于只转写用户关心的片段，避免对整集做 ASR）：
+   - 若 `timestampSeconds` 不为 null：
+     - `startSeconds = max(0, timestampSeconds - 120)`
+     - `endSeconds = timestampSeconds + 120`
+   - 若 `timestampSeconds` 为 null：不传时间参数（转写全集）
+
+2. 确保 attachments 目录存在（同 Step 2.5）。
+
+3. 运行音频转写脚本：
+
+**有时间窗口时（timestampSeconds 不为 null）：**
+```bash
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
+  --media-url "<audioUrl>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "https://www.xiaoyuzhoufm.com" \
+  --start "{startSeconds}" \
+  --end "{endSeconds}"
+```
+
+**转写全集时（timestampSeconds 为 null）：**
+```bash
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
+  --media-url "<audioUrl>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "https://www.xiaoyuzhoufm.com"
+```
+
+4. 脚本输出 JSON：
+   ```json
+   { "srtPath": "transcript.srt", "fullText": "转写纯文本..." }
+   ```
+   - 成功后：标记 `asrAvailable = true`，将 `fullText` 存入 `subtitleText`，用于深度摘要
+   - 失败后（含 `"error"` 字段）：标记 `asrAvailable = false`，**不中止流程**，在 Step 3 中报告错误
+
 ## Step 2.7: Extract video transcript (if applicable)
+
+**此步骤适用于微博、小红书等有 `videoUrl` 的平台。小宇宙平台请使用 Step 2.C。**
 
 If the JSON contains a non-null `videoUrl` field **and** the user has configured
 ASR credentials in `.env`, extract the audio and transcribe it.
@@ -259,6 +370,14 @@ has_image_analysis: {true/false}
 ---
 account_name: '{accountName}'
 digest: '{digest}'
+---
+
+(For 小宇宙 episodes only, also add these frontmatter fields:)
+---
+podcast: '{podcast}'
+episode_id: '{episodeId}'
+duration_seconds: {durationSeconds}
+timestamp_seconds: {timestampSeconds or null}
 ---
 
 # {title}
@@ -337,6 +456,55 @@ If an individual image's analysis failed, use:
 (For **WeChat** articles: OMIT this 图片 section entirely — images are already
 embedded inline in the 原文内容 section above.)
 
+## 字幕摘录
+
+(仅限小宇宙平台，且 `subtitleAvailable = true` 或 `asrAvailable = true` 时包含此区块。)
+
+(来源标注：)
+- 若字幕来自平台字幕文件：`> 📝 来源：平台字幕`
+- 若字幕来自 ASR 音频转写：`> 🎙️ 来源：ASR 音频转写`
+
+(若 `timestampSeconds` 不为 null，标注摘录范围：)
+> 📍 以下内容为打点时间 `{MM:SS}` 前后 2 分钟的字幕（共 {filteredEntries.length} 条）
+
+(将 `filteredEntries` 的文本按顺序输出，每行格式：)
+> `[{startMM:SS}]` 字幕文本
+
+(若 `summaryScope = "full"`，省略范围提示，直接输出全部字幕文本。)
+
+(若 `subtitleAvailable = false` 且 `asrAvailable = false`，输出：)
+> ⚠️ 该剧集平台字幕不可用，ASR 转写也未成功。
+
+**金句摘录：**
+
+从 `filteredEntries`（或全集字幕）中选取 3 句最具洞见或值得引用的话，格式如下：
+
+- 计算条目总数 N_total 和时间范围（窗口模式：startSeconds ~ endSeconds；全集模式：0 ~ durationSeconds）
+- 若字幕来自 ASR（SRT 时间戳为相对于片段起始的偏移），实际剧集时间 = SRT 时间戳 + startSeconds
+- 对每条选出的金句（条目索引 i），计算剧集时间：
+  - 窗口模式：`approx_episode_seconds = startSeconds + (i / N_total) × (endSeconds - startSeconds)`
+  - 全集模式：`approx_episode_seconds = (i / N_total) × durationSeconds`
+  - `percent = round(approx_episode_seconds / durationSeconds × 100)`
+  - 显示为：`` `~MM:SS` ``（全集约 {percent}% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（全集约 X% 处）
+
+**金句选取标准：**
+- 选最能捕捉核心洞见、关键论点或令人印象深刻的表述
+- 分散时间分布（窗口内靠前、中间、靠后各一句）
+- 不选连续或相邻条目
+
+## 节目简介
+
+(仅限小宇宙平台，输出 `description` 字段内容，即 shownotes / 节目简介。)
+
 ## 元信息
 
 (For Weibo — use reposts/comments/likes stats:)
@@ -350,8 +518,26 @@ embedded inline in the 原文内容 section above.)
 - 公众号: {accountName}
 - 摘要: {digest}
 
+(For 小宇宙 — use podcast name and duration:)
+- 节目：{podcast}
+- 时长：{Math.floor(durationSeconds/60)} 分钟
+(若 timestampSeconds 不为 null:)
+- 打点：{MM:SS}（{timestampSeconds} 秒）
+
 (Omit stats lines that are null for all fields.)
 ```
+
+**小宇宙笔记的深度摘要要求：**
+
+在 `## 深度总结` 部分，若 `timestampSeconds` 不为 null（用户指定了时间点）：
+- 明确标注摘要的时间范围：`> 内容范围：{startMM:SS} — {endMM:SS}`
+- 仅基于 `filteredEntries` 内容生成摘要，不延伸到窗口外
+- 说明该时间段的主要观点/讨论内容
+- 如有需要，从 `description`（节目简介）提供背景上下文
+
+若 `summaryScope = "full"`（用户未指定时间点）：
+- 基于全部 `subtitleText` 生成完整剧集摘要
+- 参考 `description` 补充节目背景
 
 ### File naming
 

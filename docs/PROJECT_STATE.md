@@ -2,7 +2,7 @@
 
 > 最后更新：2026-04-04
 
-## 当前阶段：Step 6 完成 — 视频/音频 ASR 转写 ✅
+## 当前阶段：Step 9 完成 — 小宇宙播客支持 ✅
 
 ## 阶段总览
 
@@ -16,6 +16,7 @@
 | Step 6 | 视频/音频 ASR — yt-dlp 下载、讯飞 LFASR/Whisper 转写、SRT 生成 | ✅ 已完成 |
 | Step 7 | 分发与安装 — OpenClaw/ClawHub/Claude Code 多渠道分发、Chrome CDP 替代 Playwright | ✅ 已完成 |
 | Step 8 | 微信公众号 — 实现 wechat.ts，HTTP fetch + Chrome CDP 双路径抓取 | ✅ 已完成 |
+| Step 9 | 小宇宙播客 — 实现 xiaoyuzhou.ts，平台字幕 + ASR 降级 + 时间打点 | ✅ 已完成 |
 
 ---
 
@@ -183,6 +184,29 @@
 | SKILL.md 添加 `mp.weixin.qq.com` 平台识别和 `wechat.ts` 调用指令 | ✅ |
 | 单元测试（`test-wechat.ts`）| ✅ |
 | E2E 测试支持（`npm run test:wechat:e2e`）| ✅ |
+
+---
+
+---
+
+## Step 9：小宇宙播客支持 ✅
+
+**目标：** 实现小宇宙播客抓取，支持剧集元数据提取、平台字幕下载、ASR 音频转写降级、时间打点窗口过滤。
+
+| 任务 | 状态 |
+|------|------|
+| 实现 `xiaoyuzhou.ts` handler | ✅ |
+| 短链接解析（`xyzfm.link/s/xxx`），`redirect: "manual"` 保留 `#ts=` 片段 | ✅ |
+| 剧集元数据提取（`__NEXT_DATA__` scraping，无需鉴权） | ✅ |
+| 平台字幕下载（`POST /v1/episode-transcript/get`，`x-jike-access-token` JWT） | ✅ |
+| 时间打点时间窗口过滤（±2 分钟，`subtitleEntries` 过滤） | ✅ |
+| ASR 音频降级（`audioUrl` + `--start`/`--end` 时间参数） | ✅ |
+| `extract-transcript.ts` 扩展 `--start`/`--end` 参数（`parseTimeArg`，yt-dlp `--download-sections`，ffmpeg `-ss`/`-to`） | ✅ |
+| SKILL.md Steps 2.A（字幕下载）、2.B（时间过滤）、2.C（ASR 降级）、字幕摘录区块、金句摘录 | ✅ |
+| `XiaoyuzhouContent` 类型定义（`podcast`、`episodeId`、`durationSeconds`、`timestampSeconds`、`subtitleUrl`、`audioUrl`） | ✅ |
+| `.env.example` 添加 `LINKMIND_XIAOYUZHOU_TOKEN` | ✅ |
+| 25 个单元测试（`npm run test:xiaoyuzhou`） | ✅ |
+| Bug fix：`resolveShortLink` 改用 `redirect: "manual"` 保留 URL 片段 | ✅ |
 
 ---
 

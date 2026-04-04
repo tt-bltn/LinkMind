@@ -1,5 +1,5 @@
 export interface CapturedContent {
-  platform: "weibo" | "xiaohongshu" | "wechat";
+  platform: "weibo" | "xiaohongshu" | "wechat" | "xiaoyuzhou";
   title: string;
   author: string;
   authorAvatar?: string;
@@ -65,6 +65,17 @@ export interface WechatContent extends CapturedContent {
    * Use this field instead of `text` when rendering WeChat notes.
    */
   richContent?: string;
+}
+
+export interface XiaoyuzhouContent extends CapturedContent {
+  platform: "xiaoyuzhou";
+  episodeId: string;
+  podcast: string;                  // 节目名称（如"42章经"）
+  durationSeconds: number;          // 音频总时长（秒）
+  timestampSeconds: number | null;  // 分享时打点的时间（秒），无则 null
+  subtitleUrl: string | null;       // 平台提供的字幕文件 URL，无则 null
+  description: string;              // 节目 shownotes / 简介
+  audioUrl: string;                 // 音频文件直链（用于下载音频或 ASR 提取）
 }
 
 export function isError(result: HandlerResult): result is HandlerError {
