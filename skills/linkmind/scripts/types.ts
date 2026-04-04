@@ -1,5 +1,5 @@
 export interface CapturedContent {
-  platform: "weibo" | "xiaohongshu";
+  platform: "weibo" | "xiaohongshu" | "wechat";
   title: string;
   author: string;
   authorAvatar?: string;
@@ -49,6 +49,16 @@ export interface HandlerError {
 }
 
 export type HandlerResult = CapturedContent | HandlerError;
+
+export interface WechatContent extends CapturedContent {
+  platform: "wechat";
+  accountName: string;
+  digest: string;
+  coverImage: string | null;
+  readCount: number | null;
+  likeCount: number | null;
+  inLookCount: number | null;
+}
 
 export function isError(result: HandlerResult): result is HandlerError {
   return "error" in result;
