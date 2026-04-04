@@ -339,7 +339,7 @@ async function routeAsr(
   const openai = asr.openai;
 
   const hasIflytek =
-    !!iflytek?.app_id && !!iflytek?.api_key && !!iflytek?.api_secret;
+    !!iflytek?.app_id && !!iflytek?.api_key;
   const hasOpenai = !!openai?.api_key;
 
   if (!hasIflytek && !hasOpenai) {

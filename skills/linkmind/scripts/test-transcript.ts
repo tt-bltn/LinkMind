@@ -234,7 +234,9 @@ async function runE2E(): Promise<void> {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-runE2E().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (isE2E) {
+  runE2E().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
