@@ -91,8 +91,9 @@ export function extractContentImages(html: string): string[] {
     } else if (src && src.startsWith("http")) {
       url = src;
     }
-    // Filter: only accept mmbiz CDN images
-    if (url && url.includes("mmbiz.qpic.cn")) {
+    // Accept any http article image; exclude WeChat UI resource domains
+    const WECHAT_UI_DOMAINS = ["res.wx.qq.com"];
+    if (url && !WECHAT_UI_DOMAINS.some((d) => url.includes(d))) {
       results.push(url);
     }
   }
