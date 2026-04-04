@@ -1,0 +1,397 @@
+---
+name: linkmind-capture
+description: >
+  Capture social media links (Weibo, Xiaohongshu) — extract text, images,
+  and metadata, then generate a Markdown note with AI deep summary,
+  saved to the user's Obsidian vault.
+triggers:
+  - "让我记录"
+  - "帮我保存"
+  - "帮我记录"
+  - "记录这个链接"
+  - "capture this"
+  - "save this link"
+allowed-tools: Shell, Read, Write, Glob, Grep
+metadata:
+  openclaw:
+    requires:
+      bins:
+        - node
+      config:
+        - obsidian_vault
+    homepage: "https://github.com/tt-bltn/LinkMind"
+---
+
+# LinkMind — Social Media Content Capture
+
+When the user provides a social media link and asks you to capture/record/save it,
+follow the workflow below.
+
+## Step 0: Read configuration
+
+Read the config file at `skills/linkmind/config.json` to get the user's Obsidian
+vault path. If the file does not exist, tell the user:
+
+```
+请先运行配置向导：cd skills/linkmind/scripts && npm run setup
+```
+
+This runs an interactive wizard that guides the user through setting their
+Obsidian vault path, platform cookies, and ASR credentials.
+
+The config file structure:
+
+```json
+{
+  "obsidian_vault": "/absolute/path/to/vault"
+}
+```
+
+Sensitive credentials (cookies, ASR keys) are configured in
+`skills/linkmind/.env`. See the Cookie and ASR configuration sections below.
+Cookies and ASR are **optional** — basic content capture works without them.
+
+- If `obsidian_vault` is empty, ask the user to configure it.
+- Verify the vault directory exists. If not, inform the user that the path is invalid.
+- The output directory is `{obsidian_vault}/LinkMind/`. Create it if it does not exist.
+
+## Step 1: Identify the platform
+
+Match the URL against these patterns:
+
+| Platform       | URL patterns                                                 |
+|----------------|--------------------------------------------------------------|
+| **Weibo**      | `weibo.com`, `m.weibo.cn`                                   |
+| **Xiaohongshu**| `xiaohongshu.com`, `xhslink.com`                            |
+
+If the URL does not match any supported platform, tell the user:
+"目前 LinkMind 支持微博和小红书链接，该链接暂不支持。"
+
+## Step 2: Run the handler script
+
+The scripts live at `skills/linkmind/scripts/`.
+Run the corresponding script from the project root:
+
+**Weibo:**
+```bash
+npx tsx skills/linkmind/scripts/weibo.ts "<URL>" --config skills/linkmind/config.json
+```
+
+**Xiaohongshu:**
+```bash
+npx tsx skills/linkmind/scripts/xiaohongshu.ts "<URL>" --config skills/linkmind/config.json
+```
+
+The script outputs JSON to stdout. If the JSON contains an `"error"` field,
+the extraction failed — check the `"code"` field for the error category
+(`NETWORK`, `AUTH`, `RATE_LIMIT`, `NOT_FOUND`, `PARSE`, `UNKNOWN`) and the
+`"details"` field for a user-friendly suggestion. Report both to the user.
+
+## Step 2.5: Download images to vault
+
+If the JSON contains an `images` array with one or more URLs, download them
+locally so the note is fully viewable offline in Obsidian.
+
+1. Determine the slug (see file naming rules in Step 3).
+2. Set the attachments directory: `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/`
+3. Run the download script:
+
+```bash
+npx tsx skills/linkmind/scripts/download-images.ts \
+  --urls "{comma-separated image URLs}" \
+  --output-dir "{attachments directory}" \
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+```
+
+4. The script outputs a JSON mapping: `{ "original_url": "img-001.jpg", ... }`.
+   A `null` value means that image failed to download.
+5. For successfully downloaded images, use the relative path in Markdown:
+   `![image](attachments/{date}-{slug}/img-001.jpg)`
+6. For failed downloads, fall back to the original remote URL.
+
+If the `images` array is empty, skip this step.
+
+## Step 2.6: Analyze image content (multimodal)
+
+If images were successfully downloaded in Step 2.5, analyze each image to extract
+visual content using your multimodal capabilities.
+
+1. For each successfully downloaded image (where the download mapping value is not `null`):
+   a. Read the image file from the local path using the Read tool:
+      `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/img-001.jpg`
+   b. Analyze the image and extract:
+      - **Visible text**: Any readable text, captions, watermarks, labels, or OCR content
+      - **Key visual elements**: Charts, screenshots, UI elements, notable objects
+      - **Contextual information**: Anything that supplements the original post text
+   c. Write a concise description (1-3 sentences) capturing the information value.
+
+2. Store the per-image analysis results — you will use them in two places:
+   - **Step 3 (Markdown)**: Append as a blockquote immediately after each image
+   - **Deep Summary**: Use all image analysis results as supplementary input
+
+**Output format per image (used in the Markdown):**
+
+```markdown
+> **图片内容：** （简要描述图片中的关键信息，包括可见文字和重要视觉元素）
+```
+
+**Analysis guidelines:**
+
+- Focus on **information value** — extract meaningful text and data first,
+  then briefly describe the visual scene.
+- Be specific: include actual text content, numbers, names from the image.
+- Do NOT describe obvious formatting (e.g., "这是一张图片" or "图片显示了文字").
+- If the image is purely decorative with no informational value, write:
+  `> **图片内容：** 装饰性图片，无额外信息内容。`
+- If reading the image fails, write:
+  `> **图片内容：** ⚠️ 图片分析失败`
+
+**Skip conditions (do NOT perform analysis):**
+
+- `images` array is empty → no images to analyze
+- All images failed to download in Step 2.5 → no local files to read
+
+## Step 2.7: Extract video transcript (if applicable)
+
+If the JSON contains a non-null `videoUrl` field **and** the user has configured
+ASR credentials in `.env`, extract the audio and transcribe it.
+
+1. Ensure the attachments directory exists (same as Step 2.5):
+   `{obsidian_vault}/LinkMind/attachments/{date}-{slug}/`
+2. Run the transcript extraction script:
+
+```bash
+npx tsx skills/linkmind/scripts/extract-transcript.ts \
+  --video-url "<VIDEO_URL>" \
+  --output-dir "{attachments directory}" \
+  --config skills/linkmind/config.json \
+  --referer "{platform homepage, e.g. https://weibo.com or https://www.xiaohongshu.com}"
+```
+
+3. The script outputs JSON to stdout:
+   ```json
+   {
+     "srtPath": "transcript.srt",
+     "fullText": "完整的转写纯文本..."
+   }
+   ```
+   - `srtPath`: the SRT filename saved in the output directory
+   - `fullText`: the complete transcript as plain text (for use in the summary)
+4. If the script outputs an `"error"` field, the transcript extraction failed.
+   **Do NOT abort the entire workflow** — continue to Step 3 without the transcript.
+   Report the error to the user alongside the final result.
+
+**Skip conditions (do NOT run the script):**
+- `videoUrl` is `null` → no video to transcribe
+- `.env` has no ASR variables configured → ASR not configured;
+  inform the user: "视频转写需要配置 ASR 服务（科大讯飞或 OpenAI Whisper），请在 .env 中配置。参考 .env.example。"
+
+## Step 3: Generate the Markdown file
+
+Using the JSON output, local image paths from Step 2.5, image analysis from
+Step 2.6 (if available), and transcript from Step 2.7 (if available), create
+a Markdown file with this structure.
+
+**YAML frontmatter safety rules:**
+
+String values in YAML frontmatter MUST be properly quoted to avoid parse errors.
+Apply these rules to `title`, `author`, and `original_url`:
+
+1. **Default to single quotes** `'...'` for `title` and `author` — these fields
+   frequently contain characters that break double-quoted YAML strings (Chinese
+   curly quotes `""`, pipes `|`, colons `:`, etc.).
+2. If the value itself contains a single quote `'`, use double quotes `"..."` and
+   backslash-escape any inner double quotes.
+3. Always wrap `original_url` in double quotes `"..."` — URLs contain `?`, `=`,
+   `&` which are special in YAML.
+4. Never leave string values unquoted if they contain any of: `: | ? = & " " ' # [ ] { }`.
+
+```markdown
+---
+title: '{title}'
+date: {date}
+platform: {platform}
+author: '{author}'
+original_url: "{originalUrl}"
+captured_at: {fetchedAt}
+has_video: {true/false}
+has_transcript: {true/false}
+has_image_analysis: {true/false}
+---
+
+# {title}
+
+> 来源：{platform display name} @{author} | {date}
+
+## 深度总结
+
+(Generate the deep summary following the **Deep Summary Guidelines** below.
+If image analysis results are available from Step 2.6, incorporate them.
+If a video transcript is available from Step 2.7, incorporate it as well.
+All sources — original text, image analysis, video transcript — should be
+synthesized together.)
+
+## 原文内容
+
+{text}
+
+## 视频转写
+
+(Only include this section if Step 2.7 produced a transcript.)
+
+> 📎 字幕文件：[transcript.srt](attachments/{date}-{slug}/transcript.srt)
+
+**金句摘录：**
+
+(Read the SRT file. Parse total entry count (N_total) and estimate video duration
+from the last entry's end timestamp. If end timestamp is unavailable, use
+N_total × 3 seconds as the total duration.
+
+Select 3 quotes using the type-quota system below. For each selected quote at
+SRT entry index i, calculate:
+  approx_seconds = (i / N_total) × total_duration_seconds
+  percent = round(i / N_total × 100)
+  display as: `~MM:SS`（视频约 P% 处）
+
+**Type quota — select one quote of each type, in priority order:**
+
+1. **观点型** — Expresses a distinctive insight or counter-intuitive conclusion.
+   Signal phrases: 「本质是」「真正决定」「往往不是…而是」「关键不在于」
+
+2. **概念定义型** — Clearly defines a core concept.
+   Signal phrases: 「等于」「就是」「定义为」「翻译成人话」「说白了」
+
+3. **行动指导型** — Directly actionable guidance.
+   Signal phrases: 「应该」「需要」「不要…要」「第一步」「关键是要」
+
+**Fallback rule:** If a type has no suitable candidate in the full transcript,
+substitute the best remaining quote of any type. Max 1 fallback per note.
+Never use the same type twice across the 3 quotes.
+
+**Universal filters — exclude any entry that:**
+- Starts with pure filler with no substantive content (e.g., only "呢", "啊", "那个那个")
+- Has an SRT entry index within N_total × 10% of an already-selected entry (avoid clustering)
+
+Do NOT label quote types in the note output.:)
+
+> "（金句原文）"
+> —— `~MM:SS`（视频约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（视频约 X% 处）
+
+> "（金句原文）"
+> —— `~MM:SS`（视频约 X% 处）
+
+(If Step 2.7 was skipped because videoUrl is null, omit this section entirely.
+If Step 2.7 was skipped because ASR is not configured, add a note:
+"⚠️ 视频转写未执行：ASR 服务未配置。"
+If Step 2.7 failed, add: "⚠️ 视频转写失败：{error message}")
+
+## 图片
+
+(For each image, show the image followed by its multimodal analysis from Step 2.6.
+Use the local path if downloaded, otherwise the remote URL:)
+
+![图片](attachments/{date}-{slug}/img-001.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+![图片](attachments/{date}-{slug}/img-002.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+(If Step 2.6 was skipped because no images exist, omit the 图片 section entirely.
+If an individual image's analysis failed, use:
+> **图片内容：** ⚠️ 图片分析失败)
+
+## 元信息
+
+- 转发: {stats.reposts} | 评论: {stats.comments} | 点赞: {stats.likes}
+```
+
+### File naming
+
+Name the file as: `{date}-{slug}.md`
+
+- `{date}` is `YYYY-MM-DD` format
+- `{slug}` is derived from the title — take the first 30 chars, replace spaces with
+  hyphens, remove special characters, and lowercase. If the title is in Chinese,
+  use the first 10 Chinese characters joined by hyphens.
+- Example: `2026-03-22-张三分享成都美食推荐.md`
+
+### Output directory
+
+Save the file to `{obsidian_vault}/LinkMind/` (the vault path from Step 0).
+Create the `LinkMind/` subdirectory if it does not exist.
+
+## Step 4: Report result
+
+After saving, tell the user:
+- The file path where the note was saved (the full Obsidian vault path)
+- The title extracted from the content
+- The platform and author
+- How many images were analyzed and key findings (if image analysis was performed)
+- Whether video transcript was generated (and SRT file location if so)
+- A brief overview of the deep summary
+
+## Deep Summary Guidelines
+
+Read and follow the full guidelines in
+`skills/linkmind/references/deep-summary-guide.md`.
+
+Key points: classify the content type (观点/教程/新闻/故事/测评/清单),
+write structured fields + bullets/tables in Chinese, add 2-3 key takeaways,
+incorporate image analysis and video transcript when available.
+
+## Error handling
+
+- If the handler script fails, report the error to the user clearly.
+- Use the `code` field to tailor your response:
+  - `NETWORK` — suggest checking network and retrying
+  - `AUTH` — tell the user the content may require login; suggest configuring
+    cookies (see below)
+  - `RATE_LIMIT` — suggest waiting a few minutes before retrying
+  - `NOT_FOUND` — ask the user to verify the link is correct
+  - `PARSE` — the platform structure may have changed; suggest reporting the issue
+- If a timeout occurs, suggest the user try again later.
+- Never silently fail — always give the user feedback.
+
+## Cookie configuration (optional)
+
+Cookies are **optional**. They are only needed when capturing content that
+requires login (e.g. private or restricted posts). Public content can be
+captured without any cookie configuration.
+
+Configure platform cookies in `skills/linkmind/.env`
+(copy from `.env.example` if the file does not exist):
+
+```bash
+LINKMIND_WEIBO_COOKIE="SUB=xxx; SUBP=yyy"
+LINKMIND_XHS_COOKIE="a1=xxx; web_session=yyy"
+```
+
+To obtain cookies: log in to the platform in a browser, open DevTools → Application →
+Cookies, and copy the relevant cookie values as a semicolon-separated string.
+
+## ASR configuration (optional — required for video transcript)
+
+ASR is **optional**. Without it, video posts are still captured normally — only
+the transcript feature is unavailable.
+
+Configure ASR credentials in `skills/linkmind/.env`
+(copy from `.env.example` if the file does not exist):
+
+```bash
+LINKMIND_IFLYTEK_APP_ID=your_app_id
+LINKMIND_IFLYTEK_API_KEY=your_api_key
+LINKMIND_IFLYTEK_API_SECRET=your_api_secret
+LINKMIND_OPENAI_API_KEY=sk-xxx
+```
+
+- Configure at least one service to enable video transcript
+- If both are configured, iFlytek is tried first; on failure,
+  OpenAI is used as fallback
+- To obtain iFlytek credentials: register at https://www.xfyun.cn/, create an
+  app, enable "语音转写" service, and copy the App ID / API Key / API Secret
+- To obtain OpenAI key: https://platform.openai.com/api-keys
