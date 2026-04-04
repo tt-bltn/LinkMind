@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-04-04
+
+### Added
+
+- `richContent` field on `WechatContent`: Markdown with inline images at their original positions, faithfully reflecting the author's image placement in WeChat articles
+- `convertWechatHtmlToMd()` function in `wechat.ts`: converts WeChat article HTML to Markdown preserving inline `![](url)` at each image's original position
+- 16 new unit tests covering `convertWechatHtmlToMd` and `richContent` field population
+
+### Changed
+
+- SKILL.md Step 3: WeChat notes now use `richContent` (image+text interleaved) for `## 原文内容`, skipping the separate `## 图片` section; Weibo/Xiaohongshu are unchanged
+- SKILL.md Steps 2.5–2.6: updated WeChat image download and analysis workflow to produce resolved `richContent` with local paths and analysis blockquotes inserted inline
+- `stripWechatHtml` and `convertWechatHtmlToMd`: block-level HTML elements (`</p>`, `</div>`, `</section>`, `</ul>`, `</ol>`, `</h1-6>` etc.) now emit paragraph breaks before tag stripping, fixing paragraph/list-item concatenation that caused formatting loss in complex articles
+
 ## [0.1.2] - 2026-04-04
 
 ### Added

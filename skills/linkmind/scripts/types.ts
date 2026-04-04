@@ -58,6 +58,12 @@ export interface WechatContent extends CapturedContent {
   readCount: number | null;
   likeCount: number | null;
   inLookCount: number | null;
+  /**
+   * Markdown with inline images (e.g. `![](url)`) interleaved with text,
+   * preserving the original author's image placement in the article body.
+   * Use this field instead of `text` when rendering WeChat notes.
+   */
+  richContent?: string;
 }
 
 export function isError(result: HandlerResult): result is HandlerError {

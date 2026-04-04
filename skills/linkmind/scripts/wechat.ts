@@ -65,6 +65,52 @@ export function stripWechatHtml(html: string): string {
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
+    // Block-level close tags → paragraph break (must run before generic tag strip)
+    .replace(/<\/(p|div|section|article|h[1-6]|blockquote|ul|ol|tr|td|th)>/gi, "\n\n")
+    // List items get a bullet prefix
+    .replace(/<li[^>]*>/gi, "\n- ")
+    .replace(/<\/li>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16)),
+    )
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+const WECHAT_UI_DOMAINS = ["res.wx.qq.com"];
+
+/**
+ * Convert WeChat article HTML to Markdown with inline images.
+ * Unlike stripWechatHtml (which discards images), this preserves each <img>
+ * as a `![](url)` at its original position in the text flow, so the resulting
+ * Markdown faithfully reflects the author's image placement.
+ */
+export function convertWechatHtmlToMd(html: string): string {
+  // Replace <img> tags with Markdown image placeholders before stripping HTML
+  const withImages = html.replace(/<img\s[^>]*>/gi, (tag) => {
+    const dataSrc = tag.match(/data-src="([^"]+)"/)?.[1];
+    const src = tag.match(/\bsrc="([^"]+)"/)?.[1];
+    let url: string | null = null;
+    if (dataSrc && dataSrc.startsWith("http")) url = dataSrc;
+    else if (src && src.startsWith("http")) url = src;
+    if (!url || WECHAT_UI_DOMAINS.some((d) => url!.includes(d))) return "";
+    return `\n\n![](${url})\n\n`;
+  });
+
+  return withImages
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // Block-level close tags → paragraph break (must run before generic tag strip)
+    .replace(/<\/(p|div|section|article|h[1-6]|blockquote|ul|ol|tr|td|th)>/gi, "\n\n")
+    // List items get a bullet prefix
+    .replace(/<li[^>]*>/gi, "\n- ")
+    .replace(/<\/li>/gi, "")
     .replace(/<[^>]+>/g, "")
     .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) =>
       String.fromCodePoint(parseInt(hex, 16)),
@@ -91,9 +137,7 @@ export function extractContentImages(html: string): string[] {
     } else if (src && src.startsWith("http")) {
       url = src;
     }
-    // Accept any http article image; exclude WeChat UI resource domains
-    const WECHAT_UI_DOMAINS = ["res.wx.qq.com"];
-    if (url && !WECHAT_UI_DOMAINS.some((d) => url.includes(d))) {
+    if (url && !WECHAT_UI_DOMAINS.some((d) => url!.includes(d))) {
       results.push(url);
     }
   }
@@ -175,6 +219,7 @@ export function parseWechatHtml(html: string, originalUrl: string): WechatConten
   // Extract #js_content using depth-tracking (not lazy regex — see extractJsContent)
   const contentHtml = extractJsContent(html);
   const text = stripWechatHtml(contentHtml);
+  const richContent = convertWechatHtmlToMd(contentHtml);
   const images = extractContentImages(contentHtml);
   const videoUrl = extractVideoUrl(contentHtml);
 
@@ -187,6 +232,7 @@ export function parseWechatHtml(html: string, originalUrl: string): WechatConten
     digest,
     coverImage: coverImage || null,
     text,
+    richContent,
     images,
     videoUrl,
     readCount: null,
@@ -399,8 +445,8 @@ async function fetchViaCdp(url: string, cookie?: string): Promise<WechatContent>
     }
 
     const text = stripWechatHtml(raw.descHtml);
+    const richContent = convertWechatHtmlToMd(raw.descHtml);
     const title = raw.msg_title || makeTitle(text);
-    const WECHAT_UI_DOMAINS = ["res.wx.qq.com"];
     const images = raw.images.filter(
       (url) => !WECHAT_UI_DOMAINS.some((d) => url.includes(d)),
     );
@@ -414,6 +460,7 @@ async function fetchViaCdp(url: string, cookie?: string): Promise<WechatContent>
       digest: raw.desc || "",
       coverImage: raw.cover || null,
       text,
+      richContent,
       images,
       videoUrl: extractVideoUrl(raw.descHtml),
       readCount: null,

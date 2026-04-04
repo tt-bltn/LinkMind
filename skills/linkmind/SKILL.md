@@ -115,6 +115,12 @@ npx tsx skills/linkmind/scripts/download-images.ts \
    `![image](attachments/{date}-{slug}/img-001.jpg)`
 6. For failed downloads, fall back to the original remote URL.
 
+**For WeChat articles specifically:** after obtaining the download mapping, also
+prepare the final `richContent` by replacing each `![](original_url)` in the
+`richContent` field with `![图片](attachments/{date}-{slug}/img-NNN.jpg)` (using
+the local filename from the mapping, or the original URL if download failed).
+Store this as the "resolved richContent" — you will use it in Step 3.
+
 If the `images` array is empty, skip this step.
 
 ## Step 2.6: Analyze image content (multimodal)
@@ -134,6 +140,26 @@ visual content using your multimodal capabilities.
 2. Store the per-image analysis results — you will use them in two places:
    - **Step 3 (Markdown)**: Append as a blockquote immediately after each image
    - **Deep Summary**: Use all image analysis results as supplementary input
+
+**For WeChat articles**: after analyzing all images, update the "resolved richContent"
+(prepared in Step 2.5) by inserting each image's analysis blockquote immediately
+after the corresponding `![图片](...)` line. The final richContent should look like:
+
+```markdown
+Some text paragraph.
+
+![图片](attachments/{date}-{slug}/img-001.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+More text paragraph.
+
+![图片](attachments/{date}-{slug}/img-002.jpg)
+
+> **图片内容：** （Step 2.6 对该图片的分析结果）
+
+Final text paragraph.
+```
 
 **Output format per image (used in the Markdown):**
 
@@ -245,7 +271,12 @@ synthesized together.)
 
 ## 原文内容
 
-{text}
+(For **WeChat** articles: use the "resolved richContent" prepared in Steps 2.5–2.6
+— this is the Markdown with inline images and analysis blockquotes interleaved
+at their original positions. Do NOT add a separate 图片 section for WeChat.)
+
+(For **Weibo / Xiaohongshu**: use `{text}` here — images are listed separately
+in the 图片 section below.)
 
 ## 视频转写
 
@@ -262,8 +293,8 @@ If Step 2.7 failed, add: "⚠️ 视频转写失败：{error message}")
 
 ## 图片
 
-(For each image, show the image followed by its multimodal analysis from Step 2.6.
-Use the local path if downloaded, otherwise the remote URL:)
+(For **Weibo / Xiaohongshu** only: list each image followed by its multimodal
+analysis from Step 2.6. Use the local path if downloaded, otherwise the remote URL:)
 
 ![图片](attachments/{date}-{slug}/img-001.jpg)
 
@@ -276,6 +307,9 @@ Use the local path if downloaded, otherwise the remote URL:)
 (If Step 2.6 was skipped because no images exist, omit the 图片 section entirely.
 If an individual image's analysis failed, use:
 > **图片内容：** ⚠️ 图片分析失败)
+
+(For **WeChat** articles: OMIT this 图片 section entirely — images are already
+embedded inline in the 原文内容 section above.)
 
 ## 元信息
 
