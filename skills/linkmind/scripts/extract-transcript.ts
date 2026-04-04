@@ -206,3 +206,50 @@ export async function transcribeIflytek(
 
   throw new Error("讯飞转写超时（超过 10 分钟），请稍后重试");
 }
+
+// ---------------------------------------------------------------------------
+// OpenAI Whisper transcription
+// ---------------------------------------------------------------------------
+
+export async function transcribeOpenai(
+  mp3Path: string,
+  apiKey: string,
+  baseUrl: string = "https://api.openai.com/v1",
+  model: string = "whisper-1",
+): Promise<AsrResult> {
+  const fileBuffer = readFileSync(mp3Path);
+  const form = new FormData();
+  form.append("model", model);
+  form.append("response_format", "srt");
+  form.append(
+    "file",
+    new Blob([fileBuffer], { type: "audio/mp3" }),
+    "audio.mp3",
+  );
+
+  const resp = await fetch(`${baseUrl}/audio/transcriptions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(`OpenAI Whisper 失败: HTTP ${resp.status} ${body}`);
+  }
+
+  const srt = await resp.text();
+  // Extract plain text from SRT: remove sequence numbers and timestamps
+  const fullText = srt
+    .split("\n")
+    .filter(
+      (line) =>
+        line.trim() !== "" &&
+        !/^\d+$/.test(line.trim()) &&
+        !line.includes("-->"),
+    )
+    .join(" ")
+    .trim();
+
+  return { srt, fullText };
+}
